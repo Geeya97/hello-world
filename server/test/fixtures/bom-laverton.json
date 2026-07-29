@@ -1,0 +1,74 @@
+{
+  "observations": {
+    "notice": [
+      {
+        "copyright": "Copyright Commonwealth of Australia 2026, Bureau of Meteorology.",
+        "copyright_url": "http://www.bom.gov.au/other/copyright.shtml",
+        "disclaimer_url": "http://www.bom.gov.au/other/disclaimer.shtml",
+        "feedback_url": "http://www.bom.gov.au/other/feedback"
+      }
+    ],
+    "header": [
+      {
+        "refresh_message": "Issued at  3:34 pm EST Wednesday 29 July 2026",
+        "ID": "IDV60901",
+        "main_ID": "IDV60801",
+        "name": "Laverton",
+        "state_time_zone": "VIC",
+        "time_zone": "EST",
+        "product_name": "Capital City Observations",
+        "state": "Victoria"
+      }
+    ],
+    "data": [
+      {
+        "sort_order": 0,
+        "wmo": 94865,
+        "name": "Laverton",
+        "history_product": "IDV60801",
+        "local_date_time": "29/03:30pm",
+        "local_date_time_full": "20260729153000",
+        "aifstime_utc": "20260729053000",
+        "lat": -37.9,
+        "lon": 144.8,
+        "apparent_t": 11.0,
+        "cloud": "Mostly cloudy",
+        "cloud_base_m": 900,
+        "cloud_oktas": 6,
+        "cloud_type_id": null,
+        "cloud_type": "-",
+        "delta_t": 2.2,
+        "gust_kmh": 28,
+        "gust_kt": 15,
+        "air_temp": 13.4,
+        "dewpt": 9.8,
+        "press": 1018.3,
+        "press_qnh": 1018.2,
+        "press_msl": 1018.3,
+        "press_tend": "-",
+        "rain_trace": "0.2",
+        "rel_hum": 79,
+        "sea_state": "-",
+        "swell_dir_worded": "-",
+        "swell_height": null,
+        "swell_period": null,
+        "vis_km": "10",
+        "weather": "-",
+        "wind_dir": "NW",
+        "wind_spd_kmh": 15,
+        "wind_spd_kt": 8
+      },
+      {
+        "sort_order": 1,
+        "wmo": 94865,
+        "name": "Laverton",
+        "local_date_time": "29/03:00pm",
+        "local_date_time_full": "20260729150000",
+        "air_temp": 13.1,
+        "delta_t": 2.1,
+        "rel_hum": 80,
+        "dewpt": 9.7
+      }
+    ]
+  }
+}

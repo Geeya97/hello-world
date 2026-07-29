@@ -1,0 +1,21 @@
+{
+  "name": "current-weather-app-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend for the Current Weather App — BOM observations, Open-Meteo lookups, report formatting, Gmail delivery and the Weather Ai Agent chat proxy.",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "express": "^4.21.2",
+    "nodemailer": "^6.10.0"
+  }
+}

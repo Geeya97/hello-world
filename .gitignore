@@ -1,0 +1,23 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Secrets — never commit a filled-in .env
+.env
+.env.*
+!.env.example
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
+*.keystore
+!android/gradle/wrapper/gradle-wrapper.jar
+
+# OS noise
+.DS_Store
+Thumbs.db

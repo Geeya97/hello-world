@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches --bg-0 in web/styles.css. -->
+    <color name="bg">#060B16</color>
+    <color name="accent">#38BDF8</color>
+</resources>

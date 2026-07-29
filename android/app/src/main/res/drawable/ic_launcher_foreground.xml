@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A cloud with a thermometer: the app in one glyph. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Cloud -->
+    <path
+        android:fillColor="#7DD3FC"
+        android:pathData="M36,62 C29.4,62 24,56.6 24,50 C24,43.4 29.4,38 36,38 C37,38 38,38.1 39,38.4 C41.5,32.3 47.5,28 54.5,28 C63.6,28 71,35.4 71,44.5 C71,45 71,45.5 70.9,46 C76.6,46.9 81,51.9 81,57.9 C81,64.2 75.9,69.3 69.6,69.3 L38,69.3 C36.9,69.3 35.9,69.1 35,68.8 Z" />
+
+    <!-- Thermometer stem -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M53,54 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M50,74 L56,74 L56,86 L50,86 Z" />
+    <path
+        android:fillColor="#FB7185"
+        android:pathData="M53,90 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0 Z" />
+</vector>

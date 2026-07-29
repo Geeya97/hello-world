@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Current Weather App</title>
+  <meta name="description" content="Bureau of Meteorology weather dispatches for Sunshine West, and an AI agent for anywhere in Australia.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌦️</text></svg>">
+</head>
+<body>
+  <div class="sky" aria-hidden="true">
+    <span class="cloud c1"></span><span class="cloud c2"></span><span class="cloud c3"></span>
+  </div>
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="brand-glyph" aria-hidden="true">🌦️</span>
+      <div>
+        <h1>Current Weather App</h1>
+        <p class="tagline">Refrigeration Services · Sunshine West, VIC</p>
+      </div>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite">
+      <span class="dot" data-state="idle"></span><span id="status-text">Connecting…</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- ─────────────────────────  TOP SECTION  ───────────────────────── -->
+    <section class="panel" id="dispatch-panel" aria-labelledby="dispatch-title">
+      <div class="panel-head">
+        <div>
+          <h2 id="dispatch-title">Manual Dispatch</h2>
+          <p class="sub">Current Bureau of Meteorology conditions at Sunshine West, emailed to the family.</p>
+        </div>
+        <button class="btn btn-primary btn-start" id="start-btn" type="button">
+          <span aria-hidden="true">▶</span> Start
+        </button>
+      </div>
+
+      <div class="live" id="live" aria-live="polite">
+        <div class="live-loading" id="live-loading">Fetching the latest observation…</div>
+
+        <div class="readings" id="readings" hidden>
+          <div class="reading reading-hero">
+            <span class="reading-label">Dry bulb</span>
+            <span class="reading-value" id="r-dry">—</span>
+          </div>
+          <div class="reading reading-hero accent">
+            <span class="reading-label">Wet bulb</span>
+            <span class="reading-value" id="r-wet">—</span>
+          </div>
+          <div class="reading"><span class="reading-label">Relative humidity</span><span class="reading-value" id="r-rh">—</span></div>
+          <div class="reading"><span class="reading-label">Dew point</span><span class="reading-value" id="r-dew">—</span></div>
+          <div class="reading"><span class="reading-label">Wind</span><span class="reading-value" id="r-wind">—</span></div>
+          <div class="reading"><span class="reading-label">Pressure</span><span class="reading-value" id="r-press">—</span></div>
+        </div>
+
+        <p class="provenance" id="provenance"></p>
+
+        <details class="preview" id="preview" hidden>
+          <summary>Preview the report that gets sent</summary>
+          <pre id="preview-text"></pre>
+        </details>
+      </div>
+    </section>
+
+    <!-- ────────────────────────  BOTTOM SECTION  ─────────────────────── -->
+    <section class="panel" id="agent-panel" aria-labelledby="agent-title">
+      <div class="panel-head">
+        <div>
+          <h2 id="agent-title">Weather Ai Agent&nbsp;-&nbsp;Australia</h2>
+          <p class="sub">Any Australian suburb, any date — past or future. Ask it to send a report.</p>
+        </div>
+        <span class="pill" id="agent-pill">Powered by Claude</span>
+      </div>
+
+      <div class="chat" id="chat-log" role="log" aria-live="polite" aria-label="Conversation with the weather agent">
+        <div class="msg agent">
+          <div class="bubble">
+            <p>G'day. I'm your Australian weather agent.</p>
+            <p>Ask me for conditions anywhere in Australia — any suburb, any date, past or future — and I can email the report to anyone on <strong>@refrigerationservices.com.au</strong>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="suggestions" id="suggestions">
+        <button type="button" class="chip">What's it doing in Sunshine West right now?</button>
+        <button type="button" class="chip">Wet bulb in Bondi, NSW tomorrow at 2pm</button>
+        <button type="button" class="chip">Compare Perth and Hobart this Friday</button>
+      </div>
+
+      <form class="composer" id="chat-form">
+        <label class="sr-only" for="chat-input">Message the weather agent</label>
+        <textarea id="chat-input" rows="1" placeholder="Ask about Australian weather…" autocomplete="off"></textarea>
+        <button class="btn btn-primary btn-send" id="chat-send" type="submit" aria-label="Send message">
+          <span aria-hidden="true">↑</span>
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Observations from the <strong>Bureau of Meteorology</strong>. Agent lookups from <strong>Open-Meteo</strong>. Reports go only to <code>@refrigerationservices.com.au</code>.</p>
+  </footer>
+
+  <!-- ──────────────────────────  DISPATCH LOOP  ─────────────────────── -->
+  <dialog class="modal" id="dispatch-modal" aria-labelledby="modal-title">
+    <form method="dialog" id="dispatch-form" novalidate>
+      <header class="modal-head">
+        <h3 id="modal-title">Send a weather dispatch</h3>
+        <p class="sub">Enter a family address. Keep going as long as you like — the loop only stops when you say so.</p>
+      </header>
+
+      <div class="field">
+        <label for="email-input">Family email address</label>
+        <input
+          id="email-input" name="email" type="text" inputmode="email" autocomplete="off"
+          placeholder="name@refrigerationservices.com.au"
+          aria-describedby="email-error" spellcheck="false">
+        <p class="error" id="email-error" role="alert" hidden></p>
+      </div>
+
+      <ul class="sent-list" id="sent-list" aria-label="Reports sent this round"></ul>
+
+      <footer class="modal-foot">
+        <button class="btn btn-ghost" id="break-btn" type="button" value="break">Give me a Break</button>
+        <button class="btn btn-primary" id="send-btn" type="submit" value="send">Send</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

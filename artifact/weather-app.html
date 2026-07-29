@@ -1,0 +1,950 @@
+<title>Current Weather App — Preview</title>
+
+<!--
+  Claude-space preview of the Current Weather App.
+
+  A published artifact runs under a strict CSP with no network access at all, so
+  this page cannot call the Bureau, cannot run the Claude agent, and cannot send
+  mail on its own. What it CAN do honestly is the whole interaction: the dispatch
+  loop, the recipient rule, the report format, and handing a finished draft to
+  Gmail. Everything that would need a server is labelled as sample data on the
+  page itself, and the working app lives in the repo.
+
+  Design note: the palette and type here match web/styles.css and the Android
+  theme so all three surfaces read as one product. Light theme is a printed
+  observation sheet; dark theme is the same instrument at night.
+-->
+
+<style>
+  :root {
+    /* Light: a printed BOM observation sheet. */
+    --ground: #E8EDF2;
+    --sheet: #FBFCFD;
+    --panel: #FFFFFF;
+    --rule: #C6D2DE;
+    --rule-soft: #DDE5EC;
+    --ink: #0B1A28;
+    --ink-mid: #46586B;
+    --ink-soft: #74869A;
+    --dry: #0E6F9E;
+    --wet: #B5730B;
+    --ok: #147A5B;
+    --stop: #B3243C;
+    --accent: #0E6F9E;
+
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --step-0: 0.9375rem;
+    --step-1: 1.0625rem;
+    --step-2: 1.375rem;
+    --step-3: 1.75rem;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* Dark: the same instrument, lit from within. */
+      --ground: #060C14;
+      --sheet: #0A131F;
+      --panel: #0E1B2A;
+      --rule: #1D2E42;
+      --rule-soft: #162536;
+      --ink: #DCE6F0;
+      --ink-mid: #93A8BE;
+      --ink-soft: #6C819A;
+      --dry: #4FC3E8;
+      --wet: #F0A830;
+      --ok: #3DBE90;
+      --stop: #F0708C;
+      --accent: #4FC3E8;
+      color-scheme: dark;
+    }
+  }
+
+  /* The viewer's own toggle must win over the OS preference, both directions. */
+  :root[data-theme="dark"] {
+    --ground: #060C14;
+    --sheet: #0A131F;
+    --panel: #0E1B2A;
+    --rule: #1D2E42;
+    --rule-soft: #162536;
+    --ink: #DCE6F0;
+    --ink-mid: #93A8BE;
+    --ink-soft: #6C819A;
+    --dry: #4FC3E8;
+    --wet: #F0A830;
+    --ok: #3DBE90;
+    --stop: #F0708C;
+    --accent: #4FC3E8;
+    color-scheme: dark;
+  }
+
+  :root[data-theme="light"] {
+    --ground: #E8EDF2;
+    --sheet: #FBFCFD;
+    --panel: #FFFFFF;
+    --rule: #C6D2DE;
+    --rule-soft: #DDE5EC;
+    --ink: #0B1A28;
+    --ink-mid: #46586B;
+    --ink-soft: #74869A;
+    --dry: #0E6F9E;
+    --wet: #B5730B;
+    --ok: #147A5B;
+    --stop: #B3243C;
+    --accent: #0E6F9E;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 20px 64px;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── masthead: an instrument's nameplate ───────────────────────────────── */
+  .masthead {
+    display: flex; flex-wrap: wrap; gap: 16px 24px;
+    align-items: flex-end; justify-content: space-between;
+    padding: 34px 0 18px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .eyebrow {
+    font-size: 0.6875rem; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  h1 {
+    margin: 6px 0 0;
+    font-size: var(--step-3);
+    font-weight: 700;
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+  }
+
+  .station-id {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--ink-mid);
+    text-align: right;
+    line-height: 1.7;
+  }
+  .station-id b { color: var(--ink); font-weight: 600; }
+
+  /* ── the honesty banner ────────────────────────────────────────────────── */
+  .notice {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 14px 16px;
+    background: color-mix(in srgb, var(--wet) 10%, var(--sheet));
+    border: 1px solid color-mix(in srgb, var(--wet) 34%, transparent);
+    border-radius: 4px;
+    font-size: 0.8125rem; line-height: 1.65;
+    color: var(--ink-mid);
+  }
+  .notice strong { color: var(--ink); }
+  .notice-mark {
+    flex: none; font-family: var(--mono); font-weight: 700;
+    color: var(--wet); font-size: 0.875rem; line-height: 1.5;
+  }
+
+  /* ── panels ────────────────────────────────────────────────────────────── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+  }
+
+  .panel-head {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    align-items: center; justify-content: space-between;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  h2 { margin: 0; font-size: var(--step-1); font-weight: 650; letter-spacing: -0.012em; }
+  .panel-head p { margin: 4px 0 0; font-size: 0.8125rem; color: var(--ink-mid); max-width: 58ch; }
+
+  .panel-body { padding: 20px; }
+
+  /* ── the two instruments ───────────────────────────────────────────────── */
+  .instruments { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .instrument {
+    padding: 14px 16px;
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    border-top: 3px solid var(--gauge);
+  }
+  .instrument.dry { --gauge: var(--dry); }
+  .instrument.wet { --gauge: var(--wet); }
+
+  .instrument .label {
+    font-size: 0.6875rem; font-weight: 600;
+    letter-spacing: 0.11em; text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .instrument .value {
+    font-family: var(--mono);
+    font-size: 1.9375rem; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em;
+    color: var(--gauge);
+    margin-top: 4px;
+  }
+  .instrument .value .unit { font-size: 0.9375rem; color: var(--ink-soft); margin-left: 2px; }
+
+  /* The depression scale — the relationship a fridgie actually reads. */
+  .scale { margin-top: 16px; }
+  .scale-track {
+    position: relative; height: 3px; border-radius: 2px;
+    background: var(--rule-soft);
+  }
+  .scale-span {
+    position: absolute; top: 0; height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--wet), var(--dry));
+  }
+  .scale-pin {
+    position: absolute; top: -5px; width: 2px; height: 13px; border-radius: 1px;
+  }
+  .scale-pin.wet { background: var(--wet); }
+  .scale-pin.dry { background: var(--dry); }
+  .scale-caption {
+    display: flex; justify-content: space-between;
+    margin-top: 8px; font-family: var(--mono); font-size: 0.6875rem;
+    color: var(--ink-soft); font-variant-numeric: tabular-nums;
+  }
+  .scale-caption b { color: var(--ink-mid); font-weight: 600; }
+
+  /* ── secondary readings, as an observation table ───────────────────────── */
+  .obs { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  .obs th, .obs td { padding: 8px 0; border-bottom: 1px solid var(--rule-soft); text-align: left; }
+  .obs th {
+    font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .obs td {
+    font-family: var(--mono); font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums; text-align: right; color: var(--ink);
+  }
+  .obs tr:last-child th, .obs tr:last-child td { border-bottom: 0; }
+
+  .provenance {
+    margin: 16px 0 0; font-size: 0.75rem; line-height: 1.7; color: var(--ink-soft);
+  }
+
+  /* ── controls ──────────────────────────────────────────────────────────── */
+  .btn {
+    font: inherit; font-size: 0.875rem; font-weight: 600;
+    padding: 10px 20px; border-radius: 3px; cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+  .btn-primary { background: var(--accent); color: var(--panel); }
+  .btn-primary:hover:not([disabled]) { background: color-mix(in srgb, var(--accent) 84%, var(--ink)); }
+
+  .btn-quiet {
+    background: transparent; color: var(--ink); border-color: var(--rule);
+  }
+  .btn-quiet:hover:not([disabled]) { border-color: var(--ink-soft); }
+
+  details.report { margin-top: 18px; }
+  details.report summary {
+    cursor: pointer; font-size: 0.8125rem; color: var(--accent);
+    font-weight: 600; padding: 6px 0;
+  }
+  details.report summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .report-out {
+    margin: 10px 0 0; padding: 16px;
+    background: var(--sheet); border: 1px solid var(--rule-soft); border-radius: 3px;
+    overflow-x: auto;
+  }
+  .report-out pre {
+    margin: 0; font-family: var(--mono); font-size: 0.6875rem; line-height: 1.55;
+    color: var(--ink); white-space: pre;
+  }
+
+  .report-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+  /* ── dialog ────────────────────────────────────────────────────────────── */
+  dialog {
+    width: min(460px, calc(100vw - 32px));
+    padding: 0; border: 1px solid var(--rule); border-radius: 4px;
+    background: var(--panel); color: var(--ink);
+  }
+  dialog::backdrop { background: rgb(4 10 18 / 0.62); }
+  dialog .inner { padding: 22px; }
+
+  dialog h3 { margin: 0; font-size: var(--step-1); font-weight: 650; }
+  dialog .hint { margin: 6px 0 0; font-size: 0.8125rem; color: var(--ink-mid); }
+
+  .field { margin-top: 18px; }
+  .field label {
+    display: block; margin-bottom: 7px;
+    font-size: 0.6875rem; font-weight: 600;
+    letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-soft);
+  }
+  .field input {
+    width: 100%; font: inherit; font-size: 0.9375rem;
+    padding: 11px 13px; border-radius: 3px;
+    background: var(--sheet); color: var(--ink);
+    border: 1px solid var(--rule);
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .field input.bad { border-color: var(--stop); }
+
+  .err {
+    display: flex; gap: 8px; margin-top: 9px;
+    font-size: 0.8125rem; line-height: 1.5; color: var(--stop);
+  }
+  .err::before { content: "✕"; font-family: var(--mono); font-weight: 700; }
+
+  .ledger { list-style: none; margin: 16px 0 0; padding: 0; max-height: 160px; overflow-y: auto; }
+  .ledger li {
+    display: flex; gap: 9px; align-items: baseline;
+    padding: 7px 0; border-bottom: 1px solid var(--rule-soft);
+    font-family: var(--mono); font-size: 0.75rem; color: var(--ink-mid);
+  }
+  .ledger li::before { content: "✓"; color: var(--ok); font-weight: 700; }
+
+  .dialog-foot { display: flex; gap: 9px; margin-top: 20px; }
+  .dialog-foot .btn { flex: 1; }
+
+  /* ── agent ─────────────────────────────────────────────────────────────── */
+  .log { display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; }
+
+  .turn { display: flex; }
+  .turn.you { justify-content: flex-end; }
+  .turn .body {
+    max-width: 86%;
+    padding: 11px 14px; border-radius: 3px;
+    border: 1px solid var(--rule-soft); background: var(--sheet);
+    font-size: 0.875rem; line-height: 1.65;
+  }
+  .turn.you .body {
+    background: color-mix(in srgb, var(--accent) 12%, var(--sheet));
+    border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .turn .body p { margin: 0 0 8px; }
+  .turn .body p:last-child { margin-bottom: 0; }
+  .turn .body pre {
+    margin: 9px 0 0; padding: 12px; overflow-x: auto;
+    background: var(--ground); border: 1px solid var(--rule-soft); border-radius: 3px;
+    font-family: var(--mono); font-size: 0.625rem; line-height: 1.5; white-space: pre;
+  }
+  .turn .who {
+    font-size: 0.625rem; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--ink-soft); margin-bottom: 5px;
+  }
+
+  .prompts { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0 0; }
+  .prompt {
+    font: inherit; font-size: 0.75rem; cursor: pointer;
+    padding: 6px 12px; border-radius: 3px;
+    background: transparent; color: var(--ink-mid); border: 1px solid var(--rule);
+  }
+  .prompt:hover { border-color: var(--accent); color: var(--accent); }
+  .prompt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .composer { display: flex; gap: 9px; margin-top: 12px; }
+  .composer input {
+    flex: 1; font: inherit; font-size: 0.875rem;
+    padding: 11px 13px; border-radius: 3px;
+    background: var(--sheet); color: var(--ink); border: 1px solid var(--rule);
+  }
+  .composer input:focus { outline: none; border-color: var(--accent); }
+
+  footer {
+    font-size: 0.75rem; line-height: 1.75; color: var(--ink-soft);
+    border-top: 1px solid var(--rule); padding-top: 16px;
+  }
+  footer code { font-family: var(--mono); color: var(--ink-mid); }
+
+  .toast-rail {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+    display: flex; flex-direction: column; gap: 8px; align-items: center;
+    width: min(420px, calc(100vw - 32px)); z-index: 40; pointer-events: none;
+  }
+  .toast {
+    width: 100%; padding: 11px 15px; border-radius: 3px;
+    background: var(--panel); border: 1px solid var(--rule);
+    font-size: 0.8125rem; line-height: 1.5;
+    box-shadow: 0 10px 30px -14px rgb(0 0 0 / 0.5);
+  }
+  .toast.ok { border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  @media (max-width: 620px) {
+    .instruments { grid-template-columns: 1fr; }
+    .masthead { align-items: flex-start; }
+    .station-id { text-align: left; }
+    .dialog-foot { flex-direction: column-reverse; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">Refrigeration Services · Victoria</div>
+      <h1>Current Weather App</h1>
+    </div>
+    <div class="station-id">
+      HOME &nbsp;<b>Sunshine West, VIC 3020</b><br>
+      OBS &nbsp;&nbsp;<b>Laverton · BOM 087031</b><br>
+      DIST &nbsp;<b>13 km S</b>
+    </div>
+  </header>
+
+  <div class="notice">
+    <span class="notice-mark">[!]</span>
+    <div>
+      <strong>Interactive preview.</strong> A page published in your Claude space cannot reach
+      the network, so the readings below are a <strong>recorded Bureau of Meteorology
+      observation</strong>, not a live one, and the agent replies from the same bundled sample
+      rather than from Claude. The dispatch loop, the recipient rule and the report format are
+      the real ones. Sending opens a genuine pre-filled Gmail draft.
+      The working app — live BOM data, the Claude agent, real delivery — is in the repository.
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ top section ══════════════════════════ -->
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Manual Dispatch</h2>
+        <p>Current conditions at Sunshine West, emailed to the family.</p>
+      </div>
+      <button class="btn btn-primary" id="start">Start</button>
+    </div>
+
+    <div class="panel-body">
+      <div class="instruments">
+        <div class="instrument dry">
+          <div class="label">Dry bulb</div>
+          <div class="value" id="v-dry">13.4<span class="unit">°C</span></div>
+        </div>
+        <div class="instrument wet">
+          <div class="label">Wet bulb</div>
+          <div class="value" id="v-wet">11.2<span class="unit">°C</span></div>
+        </div>
+      </div>
+
+      <div class="scale" aria-hidden="true">
+        <div class="scale-track">
+          <div class="scale-span" id="sc-span"></div>
+          <div class="scale-pin wet" id="sc-wet"></div>
+          <div class="scale-pin dry" id="sc-dry"></div>
+        </div>
+        <div class="scale-caption">
+          <span>0 °C</span>
+          <span>depression <b id="sc-delta">Δt 2.2 °C</b></span>
+          <span>40 °C</span>
+        </div>
+      </div>
+
+      <table class="obs">
+        <tbody>
+          <tr><th scope="row">Relative humidity</th><td id="v-rh">79 %</td></tr>
+          <tr><th scope="row">Dew point</th><td id="v-dew">9.8 °C</td></tr>
+          <tr><th scope="row">Feels like</th><td id="v-app">11.0 °C</td></tr>
+          <tr><th scope="row">Wind</th><td id="v-wind">NW 15 km/h</td></tr>
+          <tr><th scope="row">Pressure (MSL)</th><td id="v-press">1018.3 hPa</td></tr>
+          <tr><th scope="row">Rain since 9am</th><td id="v-rain">0.2 mm</td></tr>
+        </tbody>
+      </table>
+
+      <p class="provenance" id="provenance"></p>
+
+      <details class="report">
+        <summary>Preview the report that gets sent</summary>
+        <div class="report-out"><pre id="report-text"></pre></div>
+        <div class="report-actions">
+          <button class="btn btn-quiet" id="copy-report">Copy report</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ bottom section ══════════════════════════ -->
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Weather Ai Agent - Australia</h2>
+        <p>Any Australian suburb, any date. In this preview it answers from bundled samples.</p>
+      </div>
+    </div>
+
+    <div class="panel-body">
+      <div class="log" id="log" role="log" aria-live="polite" aria-label="Conversation with the weather agent">
+        <div class="turn agent">
+          <div class="body">
+            <div class="who">Agent</div>
+            <p>G'day. I'm your Australian weather agent.</p>
+            <p>Ask me for conditions anywhere in Australia and I can email the report to anyone on <strong>@refrigerationservices.com.au</strong>.</p>
+            <p>In this preview I answer from four recorded samples — Sunshine West, Bondi, Perth and Hobart. The live version reads any suburb and any date.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="prompts" id="prompts">
+        <button class="prompt" type="button">What's it doing in Sunshine West right now?</button>
+        <button class="prompt" type="button">Wet bulb in Bondi</button>
+        <button class="prompt" type="button">Email the Perth report to dad@refrigerationservices.com.au</button>
+        <button class="prompt" type="button">Send Hobart to someone@gmail.com</button>
+      </div>
+
+      <form class="composer" id="chat-form">
+        <label class="sr-only" for="chat-input">Message the weather agent</label>
+        <input id="chat-input" placeholder="Ask about Australian weather…" autocomplete="off">
+        <button class="btn btn-primary" type="submit">Ask</button>
+      </form>
+    </div>
+  </section>
+
+  <footer>
+    Observations from the <strong>Bureau of Meteorology</strong>; wet bulb derived from BOM's
+    <code>delta_t</code> (the wet-bulb depression). Reports go only to
+    <code>@refrigerationservices.com.au</code>.
+  </footer>
+</div>
+
+<dialog id="dispatch">
+  <form class="inner" id="dispatch-form" novalidate>
+    <h3>Send a weather dispatch</h3>
+    <p class="hint">Enter a family address. Keep going as long as you like — the loop only stops when you say so.</p>
+
+    <div class="field">
+      <label for="email">Family email address</label>
+      <input id="email" type="text" inputmode="email" autocomplete="off" spellcheck="false"
+             placeholder="name@refrigerationservices.com.au" aria-describedby="email-err">
+      <p class="err" id="email-err" role="alert" hidden></p>
+    </div>
+
+    <ul class="ledger" id="ledger" aria-label="Reports sent this round"></ul>
+
+    <div class="dialog-foot">
+      <button class="btn btn-quiet" type="button" id="brk">Give me a Break</button>
+      <button class="btn btn-primary" type="submit" id="send">Send</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast-rail" id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ══════════════════════════════════ the recipient rule
+  // Ported from server/src/recipients.js. Anchored at both ends so a lookalike
+  // like a@refrigerationservices.com.au.evil.com cannot pass, and the local part
+  // excludes the characters used to smuggle a second address through.
+  const ADDRESS = /^[^\s@,;<>"]+@refrigerationservices\.com\.au$/i;
+  const REJECTION_MESSAGE = 'This email is not one of your family member';
+
+  function checkRecipient(value) {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    if (!trimmed) return { ok: false, error: 'Enter an email address first.' };
+    if (!ADDRESS.test(trimmed)) return { ok: false, error: REJECTION_MESSAGE };
+    return { ok: true, email: trimmed.toLowerCase() };
+  }
+
+  // ══════════════════════════════════ bundled sample observations
+  // Sunshine West is a real recorded BOM observation from Laverton. The other
+  // three stand in for the live Open-Meteo lookups the deployed app performs.
+  const SAMPLES = {
+    'sunshine west': {
+      source: 'Bureau of Meteorology (recorded sample)',
+      sourceKind: 'bom',
+      label: 'Sunshine West, VIC 3020',
+      station: 'Observed at Laverton · BOM 087031 · 13 km S',
+      date: 'Wednesday 29 July 2026', time: '3:30 PM AEST',
+      dry: 13.4, wet: 11.2, delta: 2.2, dew: 9.8, app: 11.0,
+      rh: 79, wind: 'NW 15 km/h (gust 28)', press: 1018.3, rain: 0.2,
+      method: 'BOM wet-bulb depression (delta_t)',
+    },
+    bondi: {
+      source: 'Open-Meteo (recorded sample)', sourceKind: 'open-meteo',
+      label: 'Bondi, NSW 2026', station: null,
+      date: 'Wednesday 29 July 2026', time: '3:00 PM AEST',
+      dry: 18.2, wet: 13.1, delta: 5.1, dew: 9.1, app: 17.0,
+      rh: 55, wind: 'NW 12 km/h', press: 1015.2, rain: 0.0,
+      method: 'Open-Meteo wet_bulb_temperature_2m',
+    },
+    perth: {
+      source: 'Open-Meteo (recorded sample)', sourceKind: 'open-meteo',
+      label: 'Perth, WA 6000', station: null,
+      date: 'Wednesday 29 July 2026', time: '1:00 PM AWST',
+      dry: 20.6, wet: 14.9, delta: 5.7, dew: 10.4, app: 19.8,
+      rh: 52, wind: 'SW 19 km/h', press: 1013.6, rain: 0.0,
+      method: 'Open-Meteo wet_bulb_temperature_2m',
+    },
+    hobart: {
+      source: 'Open-Meteo (recorded sample)', sourceKind: 'open-meteo',
+      label: 'Hobart, TAS 7000', station: null,
+      date: 'Wednesday 29 July 2026', time: '3:00 PM AEST',
+      dry: 9.7, wet: 8.1, delta: 1.6, dew: 6.5, app: 6.9,
+      rh: 81, wind: 'W 24 km/h', press: 1009.4, rain: 1.4,
+      method: 'Open-Meteo wet_bulb_temperature_2m',
+    },
+  };
+
+  const HOME = SAMPLES['sunshine west'];
+
+  // ══════════════════════════════════ the report
+  // Byte-compatible with server/src/report.js. Nothing ambiguous-width goes
+  // inside the frame — glyphs like ☁ are one column in a terminal and two in a
+  // browser, so a box containing them cannot stay square everywhere.
+  const WIDTH = 48;
+
+  const fmt = (v, unit = '', dp = 1) =>
+    (v === null || v === undefined || Number.isNaN(v)) ? '—' : `${Number(v).toFixed(dp)}${unit}`;
+
+  function centre(s) {
+    const pad = WIDTH - [...s].length;
+    const left = Math.floor(pad / 2);
+    return ' '.repeat(Math.max(0, left)) + s + ' '.repeat(Math.max(0, pad - left));
+  }
+
+  const section = (title) => {
+    const line = `   ── ${title} `;
+    return line + '─'.repeat(Math.max(0, WIDTH + 2 - line.length));
+  };
+
+  const row = (label, value) =>
+    `      ${label} ${'.'.repeat(Math.max(1, 22 - label.length))} ${value}`;
+
+  function quip(o) {
+    if (o.dry >= 35) return 'Scorcher. Every compressor in the west is earning its keep today.';
+    if (o.dry >= 28) return 'Warm one — good day to check those condenser coils.';
+    if (o.dry >= 20) return o.rh >= 75
+      ? 'Mild but sticky; the latent load is doing the heavy lifting.'
+      : 'Comfortable out there. Enjoy it while it lasts.';
+    if (o.dry >= 12) return 'Mild Melbourne middle ground — four seasons still on the table.';
+    if (o.dry >= 6) return 'Cold enough to keep the coolroom honest.';
+    return 'Proper cold. The coolroom is basically outdoors today.';
+  }
+
+  function buildReport(o) {
+    const L = [];
+    L.push('╔' + '═'.repeat(WIDTH) + '╗');
+    L.push('║' + centre('C U R R E N T   W E A T H E R') + '║');
+    L.push('║' + centre('D I S P A T C H') + '║');
+    L.push('╚' + '═'.repeat(WIDTH) + '╝');
+    L.push('   Prepared for the Refrigeration Services family');
+    L.push('');
+    L.push(`   📍 LOCATION   ${o.label}`);
+    if (o.station) L.push(`      ${o.station}`);
+    L.push(`   📅 DATE       ${o.date}`);
+    L.push(`   🕐 TIME       ${o.time}`);
+    L.push('');
+    L.push(section('TEMPERATURES'));
+    L.push(row('Dry bulb', fmt(o.dry, ' °C')));
+    L.push(row('Wet bulb', `${fmt(o.wet, ' °C')}   (Δt ${fmt(o.delta, ' °C')})`));
+    L.push(row('Dew point', fmt(o.dew, ' °C')));
+    L.push(row('Feels like', fmt(o.app, ' °C')));
+    L.push(section('MOISTURE'));
+    L.push(row('Relative humidity', fmt(o.rh, ' %', 0)));
+    L.push(section('AIR'));
+    L.push(row('Wind', o.wind));
+    L.push(row('Pressure (MSL)', fmt(o.press, ' hPa')));
+    L.push(row(o.sourceKind === 'bom' ? 'Rain since 9am' : 'Precipitation', fmt(o.rain, ' mm')));
+    L.push('');
+    L.push(`   "${quip(o)}"`);
+    L.push('');
+    L.push(`   Wet bulb: ${o.method}.`);
+    L.push(`   Source: ${o.source}`);
+    return L.join('\n');
+  }
+
+  const subjectFor = (o) =>
+    `Weather Dispatch — ${o.label.split(',')[0]} — ${o.date} — ${fmt(o.dry, '°C')}`;
+
+  // ══════════════════════════════════ render the home observation
+  const $ = (id) => document.getElementById(id);
+
+  $('v-rh').textContent = fmt(HOME.rh, ' %', 0);
+  $('v-dew').textContent = fmt(HOME.dew, ' °C');
+  $('v-app').textContent = fmt(HOME.app, ' °C');
+  $('v-wind').textContent = HOME.wind;
+  $('v-press').textContent = fmt(HOME.press, ' hPa');
+  $('v-rain').textContent = fmt(HOME.rain, ' mm');
+  $('provenance').textContent =
+    `${HOME.date}, ${HOME.time} · ${HOME.station} · Wet bulb via ${HOME.method} · Source: ${HOME.source}`;
+  $('report-text').textContent = buildReport(HOME);
+
+  // The depression scale, drawn across a fixed 0–40 °C span.
+  const pct = (t) => Math.max(0, Math.min(100, (t / 40) * 100));
+  $('sc-wet').style.left = `calc(${pct(HOME.wet)}% - 1px)`;
+  $('sc-dry').style.left = `calc(${pct(HOME.dry)}% - 1px)`;
+  $('sc-span').style.left = `${pct(HOME.wet)}%`;
+  $('sc-span').style.width = `${pct(HOME.dry) - pct(HOME.wet)}%`;
+  $('sc-delta').textContent = `Δt ${fmt(HOME.delta, ' °C')}`;
+
+  // ══════════════════════════════════ toasts
+  function toast(message, kind = '') {
+    const el = document.createElement('div');
+    el.className = `toast ${kind}`.trim();
+    el.textContent = message;
+    $('toasts').append(el);
+    setTimeout(() => el.remove(), 5000);
+  }
+
+  // ══════════════════════════════════ Gmail hand-off
+  function openGmailDraft(to, observation) {
+    const params = new URLSearchParams({
+      view: 'cm', fs: '1', to,
+      su: subjectFor(observation),
+      body: buildReport(observation),
+    });
+    const url = `https://mail.google.com/mail/?${params}`;
+
+    // Deliberately no 'noopener' feature here: with it, window.open always
+    // returns null and we could not tell a blocked popup from a successful one.
+    // The opener is severed manually instead, which is the same protection.
+    const win = window.open(url, '_blank');
+    if (win) {
+      try { win.opener = null; } catch { /* cross-origin once it navigates; fine. */ }
+      return true;
+    }
+
+    // A published artifact may be sandboxed against popups. Rather than fail
+    // silently, fall back to the clipboard so the report is never trapped here.
+    copy(buildReport(observation));
+    toast('Your browser blocked the Gmail window — the report is on your clipboard instead.');
+    return false;
+  }
+
+  function copy(text) {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.append(ta);
+    ta.select();
+    try { document.execCommand('copy'); } finally { ta.remove(); }
+  }
+
+  $('copy-report').addEventListener('click', () => {
+    copy(buildReport(HOME));
+    toast('Report copied.', 'ok');
+  });
+
+  // ══════════════════════════════════ the dispatch loop
+  const dialog = $('dispatch');
+  const emailInput = $('email');
+  const emailErr = $('email-err');
+  let round = [];
+
+  $('start').addEventListener('click', () => {
+    round = [];
+    $('ledger').replaceChildren();
+    emailInput.value = '';
+    clearError();
+    dialog.showModal();
+    emailInput.focus();
+  });
+
+  // Submitting must never end the loop — only "Give me a Break" does.
+  $('dispatch-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    dispatchOne();
+  });
+
+  $('brk').addEventListener('click', endRound);
+
+  // Esc is the same gesture as "Give me a Break".
+  dialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    endRound();
+  });
+
+  emailInput.addEventListener('input', clearError);
+
+  function dispatchOne() {
+    const check = checkRecipient(emailInput.value);
+    if (!check.ok) {
+      showError(check.error);
+      return;
+    }
+
+    openGmailDraft(check.email, HOME);
+
+    const li = document.createElement('li');
+    li.textContent = check.email;
+    $('ledger').append(li);
+
+    round.push(check.email);
+    emailInput.value = '';
+    clearError();
+    emailInput.focus();
+  }
+
+  function endRound() {
+    dialog.close();
+    if (round.length === 0) {
+      toast('No reports sent this round.');
+    } else {
+      const names = round.map((e) => e.split('@')[0]).join(', ');
+      toast(`Break time. ${round.length} report${round.length === 1 ? '' : 's'} sent — ${names}.`, 'ok');
+    }
+    round = [];
+    $('start').focus();
+  }
+
+  function showError(message) {
+    emailErr.textContent = message;
+    emailErr.hidden = false;
+    emailInput.classList.add('bad');
+    emailInput.setAttribute('aria-invalid', 'true');
+    emailInput.select();
+  }
+
+  function clearError() {
+    emailErr.hidden = true;
+    emailErr.textContent = '';
+    emailInput.classList.remove('bad');
+    emailInput.removeAttribute('aria-invalid');
+  }
+
+  // ══════════════════════════════════ the agent (scripted preview)
+  const log = $('log');
+
+  function addTurn(who, build) {
+    const turn = document.createElement('div');
+    turn.className = `turn ${who === 'You' ? 'you' : 'agent'}`;
+    const body = document.createElement('div');
+    body.className = 'body';
+
+    const label = document.createElement('div');
+    label.className = 'who';
+    label.textContent = who;
+    body.append(label);
+
+    build(body);
+    turn.append(body);
+    log.append(turn);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  const para = (body, text) => {
+    const p = document.createElement('p');
+    p.textContent = text;
+    body.append(p);
+  };
+
+  const block = (body, text) => {
+    const pre = document.createElement('pre');
+    pre.textContent = text;
+    body.append(pre);
+  };
+
+  function findSuburb(text) {
+    const lowered = text.toLowerCase();
+    return Object.keys(SAMPLES).find((name) => lowered.includes(name)) ?? null;
+  }
+
+  /** Pull an email address out of free text so the rule can be applied to it. */
+  function findEmail(text) {
+    const match = text.match(/[^\s@,;<>"]+@[^\s,;<>"]+/);
+    return match ? match[0].replace(/[.,;]$/, '') : null;
+  }
+
+  function respond(question) {
+    const suburbKey = findSuburb(question);
+    const observation = suburbKey ? SAMPLES[suburbKey] : null;
+    const email = findEmail(question);
+    const wantsSend = /\b(email|send|dispatch|mail)\b/i.test(question);
+
+    addTurn('Agent', (body) => {
+      // The domain rule is applied to whatever address appears in the message,
+      // exactly as the server would, before anything else is considered.
+      if (email) {
+        const check = checkRecipient(email);
+        if (!check.ok) {
+          para(body, check.error);
+          para(body, 'Reports only go to addresses on @refrigerationservices.com.au.');
+          return;
+        }
+
+        if (!observation) {
+          para(body, "Which suburb should I send? In this preview I have Sunshine West, Bondi, Perth and Hobart.");
+          return;
+        }
+
+        para(body, `Right — ${observation.label}, ${observation.date} at ${observation.time}. Opening a draft to ${check.email} now.`);
+        block(body, buildReport(observation));
+        openGmailDraft(check.email, observation);
+        return;
+      }
+
+      if (wantsSend && !email) {
+        para(body, 'Happy to. Which address on @refrigerationservices.com.au should it go to?');
+        return;
+      }
+
+      if (!observation) {
+        para(body, "I don't have that one bundled into this preview — I'm carrying Sunshine West, Bondi, Perth and Hobart.");
+        para(body, 'The live app reads any Australian suburb and any date, past or future, straight from the Bureau and Open-Meteo.');
+        return;
+      }
+
+      para(body, `${observation.label} — ${observation.date}, ${observation.time}. Dry bulb ${fmt(observation.dry, ' °C')}, wet bulb ${fmt(observation.wet, ' °C')}, humidity ${fmt(observation.rh, ' %', 0)}.`);
+      block(body, buildReport(observation));
+      para(body, `Source: ${observation.source}.`);
+    });
+  }
+
+  $('chat-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    ask($('chat-input').value);
+    $('chat-input').value = '';
+  });
+
+  $('prompts').addEventListener('click', (event) => {
+    const button = event.target.closest('.prompt');
+    if (button) ask(button.textContent);
+  });
+
+  function ask(text) {
+    const question = text.trim();
+    if (!question) return;
+    addTurn('You', (body) => para(body, question));
+    respond(question);
+  }
+})();
+</script>
