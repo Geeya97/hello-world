@@ -130,6 +130,19 @@ fine for a presentation. But there's no reason to leave it switched on afterward
 
 ---
 
+## Nothing in your Gmail Sent folder?
+
+If the app says a draft opened but you never saw a Gmail tab, **your browser blocked it.** The
+report is still ready — click the blue **Open draft** button next to the address in the list, then
+press Send in the Gmail window. That is a real click, so it is never blocked.
+
+To stop it happening: look for a small blocked-pop-up icon at the right of the address bar, click
+it, and choose **Always allow pop-ups from this site**.
+
+Remember a draft is not a sent email. Nothing appears in Sent until you press Send in Gmail.
+
+---
+
 ## If sending is slow or a draft opens instead
 
 If a send takes ~12 seconds and then opens a Gmail draft with a message about SMTP being blocked,

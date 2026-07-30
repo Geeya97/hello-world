@@ -176,16 +176,20 @@ async function dispatchOne() {
 
     if (result.mode === 'compose' && result.composeUrl) {
       // Compose mode: hand the pre-filled draft to Gmail and let the human send it.
-      window.open(result.composeUrl, '_blank', 'noopener');
+      const opened = openDraft(result.composeUrl);
 
-      if (result.fellBackFrom === 'smtp') {
+      if (!opened) {
+        // Blocked by the browser. Never claim it opened — give them the link.
+        markRowWithDraftLink(row, `${result.to} — blocked by your browser:`, result.composeUrl);
+        toast('bad', 'Your browser blocked the Gmail window. Use the "Open draft" link in the list below.');
+      } else if (result.fellBackFrom === 'smtp') {
         // Automatic sending was configured but failed — say so, rather than
         // letting it look like this was the intended behaviour.
-        markRow(row, `${result.to} — draft opened (automatic send failed)`);
+        markRowWithDraftLink(row, `${result.to} — automatic send failed, draft opened.`, result.composeUrl);
         toast('bad', result.reason ?? 'Automatic sending failed; a Gmail draft was opened instead.');
       } else {
-        markRow(row, `${result.to} — draft opened in Gmail`);
-        toast('good', `Draft ready for ${result.to}. Press Send in Gmail.`);
+        markRowWithDraftLink(row, `${result.to} — draft opened.`, result.composeUrl);
+        toast('good', `Draft ready for ${result.to} — press Send in the Gmail tab.`);
       }
     } else {
       markRow(row, `${result.to} — sent`);
@@ -240,6 +244,25 @@ function setBusy(busy) {
 }
 
 /**
+ * Open a pre-filled Gmail draft, reporting whether it actually opened.
+ *
+ * Two traps here, both hit in practice:
+ *  - `noopener` makes window.open always return null, so a blocked pop-up is
+ *    indistinguishable from a successful one. The opener is severed manually
+ *    instead, which is the same protection.
+ *  - This runs after an await, sometimes 12 seconds after the click, so it is
+ *    outside the user-gesture window and browsers block it by default. The
+ *    caller must therefore always offer a clickable link as well — clicking that
+ *    IS a gesture, so it always works.
+ */
+function openDraft(url) {
+  const win = window.open(url, '_blank');
+  if (!win) return false;
+  try { win.opener = null; } catch { /* cross-origin after navigation; fine */ }
+  return true;
+}
+
+/**
  * Log what actually went out.
  *
  * This exists for the live demo: it lets the audience see the real report that
@@ -265,8 +288,20 @@ function recordSent(result) {
   when.textContent = time;
   const how = document.createElement('span');
   how.className = `how ${result.delivered ? 'delivered' : 'draft'}`;
-  how.textContent = result.delivered ? 'Delivered' : 'Draft opened';
+  how.textContent = result.delivered ? 'Delivered' : 'Needs your Send';
   summary.append(to, when, how);
+
+  // Always reachable, whether or not the pop-up was allowed.
+  if (!result.delivered && result.composeUrl) {
+    const link = document.createElement('a');
+    link.className = 'draft-link';
+    link.href = result.composeUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'Open draft';
+    link.addEventListener('click', (e) => e.stopPropagation());
+    summary.append(link);
+  }
 
   const pre = document.createElement('pre');
   pre.textContent = result.report?.text ?? '(report text unavailable)';
@@ -294,6 +329,26 @@ function addPendingRow(email) {
 function markRow(li, text) {
   li.classList.remove('pending');
   li.textContent = text;
+}
+
+/**
+ * Mark a row and attach a clickable draft link.
+ *
+ * The link matters even when the pop-up did open: it is the recovery path when
+ * the browser blocked it, and clicking it counts as a user gesture so it is
+ * never blocked itself.
+ */
+function markRowWithDraftLink(li, text, composeUrl) {
+  li.classList.remove('pending');
+  li.textContent = text;
+
+  const link = document.createElement('a');
+  link.className = 'draft-link';
+  link.href = composeUrl;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = 'Open draft';
+  li.append(link);
 }
 
 // ═══════════════════════════════════════════════════ bottom section: agent
@@ -351,8 +406,13 @@ async function sendChat(text) {
       if (action.type !== 'send') continue;
 
       if (action.mode === 'compose' && action.composeUrl) {
-        window.open(action.composeUrl, '_blank', 'noopener');
-        toast('good', `Draft ready for ${action.to}. Press Send in Gmail.`);
+        const opened = openDraft(action.composeUrl);
+        toast(
+          opened ? 'good' : 'bad',
+          opened
+            ? `Draft ready for ${action.to} — press Send in the Gmail tab.`
+            : 'Your browser blocked the Gmail window. Use the "Open draft" link in the list below.',
+        );
       } else if (action.delivered) {
         toast('good', `Report sent to ${action.to}.`);
       }
