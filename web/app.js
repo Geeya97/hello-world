@@ -28,6 +28,10 @@ const els = {
   sentList: $('sent-list'),
   sendBtn: $('send-btn'),
   breakBtn: $('break-btn'),
+  sentPanel: $('sent-panel'),
+  sentLog: $('sent-log'),
+  sentCount: $('sent-count'),
+  clearSent: $('clear-sent'),
   chatLog: $('chat-log'),
   chatForm: $('chat-form'),
   chatInput: $('chat-input'),
@@ -38,6 +42,8 @@ const els = {
 
 /** Everything sent in the current Start…"Give me a Break" round. */
 let round = [];
+/** Every report sent since the page loaded, across rounds and the agent. */
+let sentThisSession = 0;
 /** Conversation history handed to the agent each turn. */
 const history = [];
 
@@ -137,6 +143,7 @@ async function dispatchOne() {
       toast('good', `Report sent to ${result.to}.`);
     }
 
+    recordSent(result);
     round.push(result.to);
     els.emailInput.value = '';
     clearError();
@@ -182,6 +189,49 @@ function setBusy(busy) {
   els.sendBtn.disabled = busy;
   els.sendBtn.textContent = busy ? 'Sending…' : 'Send';
 }
+
+/**
+ * Log what actually went out.
+ *
+ * This exists for the live demo: it lets the audience see the real report that
+ * was sent without needing a recipient's inbox open on screen.
+ */
+function recordSent(result) {
+  sentThisSession += 1;
+  els.sentCount.textContent = String(sentThisSession);
+  els.sentPanel.hidden = false;
+
+  const time = new Date().toLocaleTimeString('en-AU', {
+    hour: 'numeric', minute: '2-digit', second: '2-digit',
+  });
+
+  const details = document.createElement('details');
+
+  const summary = document.createElement('summary');
+  const to = document.createElement('span');
+  to.className = 'to';
+  to.textContent = result.to;
+  const when = document.createElement('span');
+  when.className = 'when';
+  when.textContent = time;
+  const how = document.createElement('span');
+  how.className = `how ${result.delivered ? 'delivered' : 'draft'}`;
+  how.textContent = result.delivered ? 'Delivered' : 'Draft opened';
+  summary.append(to, when, how);
+
+  const pre = document.createElement('pre');
+  pre.textContent = result.report?.text ?? '(report text unavailable)';
+
+  details.append(summary, pre);
+  els.sentLog.prepend(details);
+}
+
+els.clearSent.addEventListener('click', () => {
+  sentThisSession = 0;
+  els.sentCount.textContent = '0';
+  els.sentLog.replaceChildren();
+  els.sentPanel.hidden = true;
+});
 
 function addPendingRow(email) {
   const li = document.createElement('li');
@@ -247,13 +297,18 @@ async function sendChat(text) {
     history.push({ role: 'assistant', content: result.reply });
 
     // If the agent sent something in compose mode, open the draft for the user.
+    // Either way it goes in the session log alongside the manual dispatches.
     for (const action of result.actions ?? []) {
-      if (action.type === 'send' && action.mode === 'compose' && action.composeUrl) {
+      if (action.type !== 'send') continue;
+
+      if (action.mode === 'compose' && action.composeUrl) {
         window.open(action.composeUrl, '_blank', 'noopener');
         toast('good', `Draft ready for ${action.to}. Press Send in Gmail.`);
-      } else if (action.type === 'send' && action.delivered) {
+      } else if (action.delivered) {
         toast('good', `Report sent to ${action.to}.`);
       }
+
+      recordSent(action);
     }
   } catch (err) {
     thinking.remove();

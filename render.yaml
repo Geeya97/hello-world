@@ -1,0 +1,44 @@
+# Render deployment for the Current Weather App.
+#
+# Render is used rather than Vercel/Netlify/Cloudflare Workers because those are
+# serverless and physically cannot open an SMTP connection, which Gmail App
+# Password sending requires. Render allows outbound SMTP.
+#
+# To deploy: Render dashboard → New → Blueprint → pick this repo. Render reads
+# this file, then prompts for the three secrets below (sync: false means they are
+# never stored in git).
+#
+# Note the free plan sleeps after ~15 minutes idle and takes 30-60s to wake.
+# Before a presentation, open the URL once to warm it up — see DEMO.md.
+
+services:
+  - type: web
+    name: current-weather-app
+    runtime: node
+    plan: free
+    region: singapore # closest Render region to Australia
+    buildCommand: cd server && npm install --omit=dev
+    startCommand: cd server && npm start
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+      # Send automatically rather than opening a draft. Flip to "compose" if the
+      # App Password is not available.
+      - key: MAIL_MODE
+        value: smtp
+
+      # Entered in the Render dashboard, never committed.
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # The server also serves web/ from the same origin, so no cross-origin
+      # allowance is needed. Leave unset.
+      - key: RATE_LIMIT_MAX
+        value: "60"

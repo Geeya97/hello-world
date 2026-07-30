@@ -16,19 +16,58 @@ Weather dispatches for a Melbourne refrigeration business. Two sections, three s
 
 ---
 
+**Presenting with this? Read [DEMO.md](DEMO.md)** — it is the runbook, including the preflight
+check and a fallback for everything that can fail on the day.
+
+---
+
 ## Quick start
+
+**No terminal:** double-click the launcher for your system. It installs what's needed on first
+run, starts the app, and opens your browser.
+
+- Windows → `launch/start-windows.bat`
+- macOS → `launch/start-macos.command` (first time: right-click → Open → Open)
+- Linux → `launch/start-linux.sh`
+
+**Or by hand:**
 
 ```bash
 cd server
 npm install
-cp .env.example .env      # add ANTHROPIC_API_KEY for the chat agent
+cp .env.example .env      # then fill in the secrets
 npm start                 # http://localhost:8787
 ```
 
 The server also serves `web/`, so that one command gives you the whole web app on one origin.
 
-No network access, or just working on the UI? `DEMO_MODE=1 npm start` serves a recorded BOM
+`localhost` means "this computer" — that URL only works on the machine running the app. To get a
+URL that works anywhere, deploy it (see below).
+
+### Check everything works before you rely on it
+
+```bash
+cd server
+npm run check                                              # BOM, Open-Meteo, Claude, Gmail
+PREFLIGHT_TO=you@refrigerationservices.com.au npm run check # ...and send one real email
+```
+
+Each failure names its own fix. Also available as `GET /api/preflight` so it can be run against a
+deployed instance.
+
+No network, or just working on the UI? Put `DEMO_MODE=1` in `server/.env` to serve a recorded BOM
 observation instead of calling the Bureau. Every response is labelled as sample data.
+
+---
+
+## Deploying
+
+`render.yaml` is ready for [Render](https://dashboard.render.com): **New → Blueprint → pick this
+repo**, then paste the three secrets when prompted. You get a permanent HTTPS URL and pushing a
+commit redeploys.
+
+Render, Railway and Fly all work. **Vercel, Netlify and Cloudflare Workers do not** — they are
+serverless and cannot open the SMTP connection Gmail sending needs.
 
 ---
 
@@ -84,8 +123,10 @@ Two modes, set by `MAIL_MODE`.
 already filled in, and you press Send. On Android this is a native Gmail intent. No credentials
 exist anywhere in this project, so there is nothing to leak.
 
-**`smtp`** — the server sends silently through Gmail. Requires 2-Step Verification on the Google
-account and an App Password from [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords):
+**`smtp`** — the server sends silently through Gmail. An **App Password** is a 16-character code
+Google generates for one specific program; your normal Gmail password will not work, because
+Google blocked password sign-in for scripts in 2022. It requires 2-Step Verification to be on,
+and you get it from [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords):
 
 ```bash
 MAIL_MODE=smtp
@@ -152,6 +193,7 @@ artifact/        the Claude-space preview
 | Route | Purpose |
 | --- | --- |
 | `GET /api/health` | mail mode, whether the chat agent is configured |
+| `GET /api/preflight?deliverTo=` | run every dependency check against this instance |
 | `GET /api/current` | BOM observation for Sunshine West + rendered report |
 | `GET /api/weather?location=&datetime=` | any AU suburb, any date |
 | `POST /api/send` | deliver a report to one allowed recipient |
@@ -162,14 +204,15 @@ artifact/        the Claude-space preview
 ## Testing
 
 ```bash
-cd server && npm test     # 44 tests
+cd server && npm test     # 60 tests
 ```
 
 Covers the BOM parser against a recorded payload, the wet-bulb maths against Stull's published
 reference values, the recipient rule against a table of lookalikes and injection attempts, report
-formatting, and drift between the rule's four copies.
+formatting, `.env` parsing, preflight result formatting, and drift between the rule's four copies.
 
 Two things the development container cannot check, because its egress allowlist blocks
 `bom.gov.au` and `open-meteo.com` and it has no Android SDK: **live API calls** and **compiling
-the Android app**. Verify those after deploying. The web UI itself was driven end-to-end in
-Chromium — the loop, both rejection cases, two successful sends, and the Gmail hand-off.
+the Android app**. `npm run check` is what confirms the first of those on a real network — run it
+before you depend on the app. The web UI itself was driven end-to-end in Chromium: the loop, both
+rejection cases, successful sends, the Gmail hand-off, and the sent-reports log.

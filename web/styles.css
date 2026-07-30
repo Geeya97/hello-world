@@ -171,6 +171,54 @@ main {
   white-space: pre;
 }
 
+/* ── sent-this-session log (demo evidence) ─────────────────────────────── */
+.sent-panel { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+
+.sent-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 12px;
+}
+.sent-head h3 {
+  margin: 0; font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; gap: 9px;
+}
+.count {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  padding: 2px 9px; border-radius: 999px;
+  color: var(--good); background: rgb(52 211 153 / 0.12);
+  border: 1px solid rgb(52 211 153 / 0.3);
+}
+.btn-sm { padding: 6px 13px; font-size: 12.5px; }
+
+.sent-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.sent-log details {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: rgb(255 255 255 / 0.035);
+  animation: rise 0.25s ease;
+}
+.sent-log summary {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  padding: 11px 14px; cursor: pointer; font-size: 13.5px;
+  border-radius: 12px;
+}
+.sent-log summary::marker { color: var(--ink-faint); }
+.sent-log summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sent-log .to { font-weight: 600; }
+.sent-log .when { font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); }
+.sent-log .how {
+  font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; margin-left: auto;
+}
+.sent-log .how.delivered { color: var(--good); background: rgb(52 211 153 / 0.12); }
+.sent-log .how.draft { color: var(--warm); background: rgb(251 191 36 / 0.12); }
+.sent-log pre {
+  margin: 0; padding: 14px; overflow-x: auto;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 11px; line-height: 1.55;
+  white-space: pre; color: var(--ink);
+}
+
 /* ── chat ──────────────────────────────────────────────────────────────── */
 .chat {
   display: flex; flex-direction: column; gap: 12px;

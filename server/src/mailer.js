@@ -28,6 +28,18 @@ export function buildMailtoUrl({ to, subject, body }) {
 
 let transportPromise = null;
 
+/**
+ * Authenticate against Gmail without sending anything.
+ *
+ * Called by preflight and once at startup, so a wrong App Password surfaces
+ * immediately rather than on the first send in front of an audience.
+ */
+export async function verifyTransport() {
+  const transport = await getTransport();
+  await transport.verify();
+  return true;
+}
+
 async function getTransport() {
   if (!transportPromise) {
     transportPromise = (async () => {

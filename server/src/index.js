@@ -12,7 +12,12 @@
  * `npm start` gives you the whole app on one origin with no CORS to think about.
  */
 
+// Must come first: it populates process.env from .env before any module below
+// captures a value at import time (mailer.js reads MAIL_MODE, demo.js DEMO_MODE).
+import './env.js';
+
 import express from 'express';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,9 +25,10 @@ import { fetchSunshineWestObservation, SUNSHINE_WEST } from './bom.js';
 import { geocodeAustralianPlace, fetchWeatherAt } from './openmeteo.js';
 import { buildReport } from './report.js';
 import { checkRecipient } from './recipients.js';
-import { sendReport, MAIL_MODE } from './mailer.js';
+import { sendReport, MAIL_MODE, verifyTransport } from './mailer.js';
 import { runChatTurn } from './chat.js';
 import { DEMO_MODE, demoObservation } from './demo.js';
+import { runPreflight } from './preflight.js';
 
 /** BOM observation for Sunshine West, or the recorded sample when in demo mode. */
 const currentHomeObservation = () =>
@@ -85,6 +91,16 @@ app.get('/api/health', (req, res) => {
     home: SUNSHINE_WEST.label,
   });
 });
+
+/**
+ * Same checks as `npm run check`, runnable against a deployed host. Excluded
+ * from the rate limiter's tight budget is unnecessary — it is slow by nature and
+ * nobody calls it in a loop.
+ */
+app.get('/api/preflight', wrap(async (req, res) => {
+  const deliverTo = req.query.deliverTo ? String(req.query.deliverTo) : null;
+  res.json(await runPreflight({ deliverTo }));
+}));
 
 app.get('/api/current', wrap(async (req, res) => {
   const observation = await currentHomeObservation();
@@ -165,11 +181,39 @@ function http(status, message) {
 }
 
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`Current Weather App API listening on http://localhost:${PORT}`);
-    console.log(`  mail mode : ${MAIL_MODE}`);
-    console.log(`  chat agent: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'NOT configured (set ANTHROPIC_API_KEY)'}`);
+  // Bind all interfaces, not just loopback: hosts route external traffic to the
+  // container's own address, and it lets a phone on the same WiFi reach a local run.
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n  Current Weather App is running.\n`);
+    console.log(`  Open this in your browser:  http://localhost:${PORT}`);
+
+    for (const address of lanAddresses()) {
+      console.log(`  From another device:        http://${address}:${PORT}`);
+    }
+
+    console.log(`\n  mail mode : ${MAIL_MODE}${MAIL_MODE === 'compose' ? ' (opens a Gmail draft; set MAIL_MODE=smtp to send automatically)' : ''}`);
+    console.log(`  chat agent: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'NOT configured — set ANTHROPIC_API_KEY'}`);
+    if (DEMO_MODE) console.log('  DEMO_MODE : on — serving a recorded BOM observation, not live data');
+    console.log('');
+
+    // Prove the Gmail credentials now rather than on the first send mid-demo.
+    if (MAIL_MODE === 'smtp') {
+      verifyTransport()
+        .then(() => console.log(`  Gmail authenticated as ${process.env.GMAIL_USER}.\n`))
+        .catch((err) => {
+          console.error(`\n  Gmail authentication FAILED: ${err.message}`);
+          console.error('  Sending will not work. Run `npm run check` for the likely cause.\n');
+        });
+    }
   });
+}
+
+/** Non-loopback IPv4 addresses, so the startup banner can show a reachable URL. */
+function lanAddresses() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter((n) => n && n.family === 'IPv4' && !n.internal)
+    .map((n) => n.address);
 }
 
 export default app;

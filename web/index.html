@@ -65,6 +65,16 @@
           <pre id="preview-text"></pre>
         </details>
       </div>
+
+      <!-- Demo evidence: what actually went out, so it can be shown on screen
+           without needing to open a recipient's inbox. -->
+      <div class="sent-panel" id="sent-panel" hidden>
+        <div class="sent-head">
+          <h3>Sent this session <span class="count" id="sent-count">0</span></h3>
+          <button class="btn btn-ghost btn-sm" id="clear-sent" type="button">Clear</button>
+        </div>
+        <ul class="sent-log" id="sent-log"></ul>
+      </div>
     </section>
 
     <!-- ────────────────────────  BOTTOM SECTION  ─────────────────────── -->

@@ -11,6 +11,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "check": "node src/preflight.js",
     "test": "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
