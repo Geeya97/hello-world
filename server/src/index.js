@@ -91,13 +91,30 @@ app.get('/api/health', (req, res) => {
 });
 
 /**
- * Same checks as `npm run check`, runnable against a deployed host. Excluded
- * from the rate limiter's tight budget is unnecessary — it is slow by nature and
- * nobody calls it in a loop.
+ * Same checks as `npm run check`, runnable against a deployed host.
+ *
+ * `deliverTo` actually sends an email, so it is gated behind PREFLIGHT_TOKEN.
+ * Without that gate anyone who found this URL could make the server mail family
+ * addresses repeatedly — the read-only checks are harmless, but the send is not.
  */
 app.get('/api/preflight', wrap(async (req, res) => {
-  const deliverTo = req.query.deliverTo ? String(req.query.deliverTo) : null;
-  res.json(await runPreflight({ deliverTo }));
+  const requested = req.query.deliverTo ? String(req.query.deliverTo) : null;
+  const token = process.env.PREFLIGHT_TOKEN;
+  let deliverTo = null;
+  let note;
+
+  if (requested) {
+    if (!token) {
+      note = 'deliverTo was ignored: set PREFLIGHT_TOKEN in the server environment to allow test sends over HTTP, or run `npm run check` locally instead.';
+    } else if (req.query.token !== token) {
+      note = 'deliverTo was ignored: the token did not match.';
+    } else {
+      deliverTo = requested;
+    }
+  }
+
+  const result = await runPreflight({ deliverTo });
+  res.json(note ? { ...result, note } : result);
 }));
 
 app.get('/api/current', wrap(async (req, res) => {
@@ -122,6 +139,31 @@ app.get('/api/weather', wrap(async (req, res) => {
     alternatives: matches.slice(1, 4).map((m) => m.label),
   });
 }));
+
+/**
+ * Sending is rate-limited harder than the rest of the API. On a public host this
+ * endpoint can put mail in someone's inbox, so the general 60/min budget is too
+ * generous for it.
+ */
+const SEND_LIMIT = { windowMs: 60_000, max: Number(process.env.SEND_RATE_LIMIT_MAX || 12) };
+const sendHits = new Map();
+
+app.post('/api/send', (req, res, next) => {
+  const key = req.ip ?? 'unknown';
+  const now = Date.now();
+  const entry = sendHits.get(key);
+  if (!entry || now - entry.start > SEND_LIMIT.windowMs) {
+    sendHits.set(key, { start: now, count: 1 });
+    return next();
+  }
+  entry.count += 1;
+  if (entry.count > SEND_LIMIT.max) {
+    return res.status(429).json({
+      error: `That's ${SEND_LIMIT.max} reports in a minute — pausing to avoid flooding inboxes. Try again shortly.`,
+    });
+  }
+  return next();
+});
 
 app.post('/api/send', wrap(async (req, res) => {
   const { email, location, datetime } = req.body ?? {};

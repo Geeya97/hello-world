@@ -31,7 +31,12 @@ host, the email leaves a datacentre and the venue WiFi only has to load a web pa
 3. It will prompt for `GMAIL_USER`, `GMAIL_APP_PASSWORD` and `GEMINI_API_KEY`. Paste them there.
 4. Wait for the first deploy, then note your URL, e.g. `https://current-weather-app.onrender.com`.
 5. Confirm everything works:
-   `https://your-url.onrender.com/api/preflight?deliverTo=you@refrigerationservices.com.au`
+   `https://your-url.onrender.com/api/preflight`
+
+   That runs every read-only check. To also send a real test email from the host, set
+   `PREFLIGHT_TOKEN` to a random string in Render's settings and then use:
+   `…/api/preflight?deliverTo=you@refrigerationservices.com.au&token=YOUR_TOKEN`
+   The token exists so a stranger who finds your URL cannot make it mail your family.
 
 **Free plan caveat:** the instance sleeps after ~15 minutes idle and takes 30–60 seconds to wake.
 Open the URL 5 minutes before you present and leave the tab open. If a cold start mid-presentation

@@ -43,3 +43,10 @@ services:
       # allowance is needed. Leave unset.
       - key: RATE_LIMIT_MAX
         value: "60"
+      - key: SEND_RATE_LIMIT_MAX
+        value: "12"
+
+      # Optional. Set to any random string to allow a real test send through
+      # GET /api/preflight?deliverTo=...&token=... on this host.
+      - key: PREFLIGHT_TOKEN
+        sync: false

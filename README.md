@@ -69,6 +69,17 @@ commit redeploys.
 Render, Railway and Fly all work. **Vercel, Netlify and Cloudflare Workers do not** — they are
 serverless and cannot open the SMTP connection Gmail sending needs.
 
+### Know this before you leave it deployed
+
+`POST /api/send` has **no authentication**. Anyone who learns the URL can make the app email
+`@refrigerationservices.com.au` addresses, capped at `SEND_RATE_LIMIT_MAX` (12) per minute per IP.
+That is an acceptable trade for a presentation on an unadvertised URL — it keeps the demo free of a
+login step — but it is not something to leave running indefinitely. **Delete or suspend the Render
+service once the presentation is done**, or add authentication in front of it.
+
+Test sends through `GET /api/preflight?deliverTo=` are gated behind `PREFLIGHT_TOKEN` for the same
+reason, and are ignored entirely unless that variable is set.
+
 ---
 
 ## The two rules that matter
@@ -105,8 +116,14 @@ Airport and Melbourne Airport are automatic fallbacks if Laverton is offline.
 BOM's feed carries `delta_t`, which is the **wet-bulb depression** — so
 `wet bulb = air_temp − delta_t` is a genuine BOM-derived value, not an estimate. Where `delta_t`
 is missing, the app falls back to Stull's (2011) formula from dry bulb and humidity, and the
-report says which was used. The two agree to 0.1 °C on the test fixture, which is what confirms
-the reading of that field is right.
+report says which was used. The two agree to within a degree, which is what confirms that reading
+of the field is right.
+
+The parser is tested against a **genuine BOM payload** — real IDV60901 output from Melbourne
+(Olympic Park), in `server/test/fixtures/bom-melbourne-real.json`. That matters because
+`bom.gov.au` is unreachable from the development container, so a hand-written fixture would only
+have proved the parser agreed with my own assumptions about BOM's field names. Every field the
+parser reads is present in the real data.
 
 BOM has no CORS headers and rejects non-browser clients, which is why this has to be fetched
 server-side. Their guidance asks for at most one request per minute per product, so responses
@@ -210,15 +227,21 @@ artifact/        the Claude-space preview
 ## Testing
 
 ```bash
-cd server && npm test     # 60 tests
+cd server && npm test     # 80 tests
 ```
 
-Covers the BOM parser against a recorded payload, the wet-bulb maths against Stull's published
-reference values, the recipient rule against a table of lookalikes and injection attempts, report
-formatting, `.env` parsing, preflight result formatting, and drift between the rule's four copies.
+Covers the BOM parser against both a hand-written and a **real** BOM payload, the wet-bulb maths
+against Stull's published reference values, the recipient rule against a table of lookalikes and
+injection attempts, report formatting, `.env` parsing, preflight result formatting, the Gemini wire
+format (tool-result role, thought-signature echoing, error translation), and drift between the
+recipient rule's four copies.
 
-Two things the development container cannot check, because its egress allowlist blocks
-`bom.gov.au` and `open-meteo.com` and it has no Android SDK: **live API calls** and **compiling
-the Android app**. `npm run check` is what confirms the first of those on a real network — run it
-before you depend on the app. The web UI itself was driven end-to-end in Chromium: the loop, both
-rejection cases, successful sends, the Gmail hand-off, and the sent-reports log.
+**Verified live:** the Gemini agent, end to end — it calls the weather tool, quotes the real
+figures, and refuses non-family recipients with the exact required wording. The web UI was driven
+in Chromium: the loop, both rejection cases, successful sends, the Gmail hand-off, and the
+sent-reports log.
+
+**Not verifiable here:** the development container's egress allowlist blocks `bom.gov.au` and
+`open-meteo.com`, all SMTP ports (25/465/587) are closed, and there is no Android SDK. So a live
+BOM fetch, a live Open-Meteo lookup, real Gmail delivery and the Android build have never run.
+`npm run check` on a real network is what confirms the first three.
