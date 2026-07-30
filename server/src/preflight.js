@@ -300,6 +300,54 @@ const pass = (name, detail) => ({ name, status: 'pass', detail });
 const skip = (name, detail) => ({ name, status: 'skip', detail });
 const fail = (name, detail, fix) => ({ name, status: 'fail', detail, fix });
 
+/**
+ * Render results as a readable web page.
+ *
+ * The JSON version is fine from a terminal, but someone opening /api/preflight in
+ * a browser before a presentation should not have to read raw JSON to find out
+ * whether their Gmail password works. Same data, legible.
+ */
+export function formatPreflightHtml({ ok, checks, note }) {
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+  const mark = { pass: '✓', fail: '✕', skip: '–' };
+  const colour = { pass: '#1a7f5a', fail: '#b3243c', skip: '#74869a' };
+
+  const rows = checks.map((c) => `
+    <li style="border:1px solid #dde5ec;border-left:4px solid ${colour[c.status]};border-radius:4px;padding:14px 16px;background:#fff">
+      <div style="display:flex;gap:10px;align-items:baseline">
+        <span style="color:${colour[c.status]};font-weight:700;font-size:17px;line-height:1.2">${mark[c.status]}</span>
+        <strong style="font-size:15px">${esc(c.name)}</strong>
+      </div>
+      <p style="margin:8px 0 0 26px;color:#46586b;font-size:13.5px;line-height:1.6">${esc(c.detail)}</p>
+      ${c.fix ? `<p style="margin:10px 0 0 26px;padding:10px 12px;background:#fdf6e7;border-radius:3px;color:#6b4f12;font-size:13px;line-height:1.6"><strong>What to do:</strong> ${esc(c.fix)}</p>` : ''}
+    </li>`).join('');
+
+  const failed = checks.filter((c) => c.status === 'fail');
+
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${ok ? 'Ready' : 'Not ready'} — Current Weather App preflight</title>
+</head>
+<body style="margin:0;padding:28px 20px 60px;background:#eef3fb;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#0b1a28">
+<div style="max-width:720px;margin:0 auto">
+  <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:#74869a">Current Weather App</p>
+  <h1 style="margin:8px 0 0;font-size:26px;letter-spacing:-.02em">${ok ? 'Ready to go' : 'Not ready yet'}</h1>
+  <p style="margin:10px 0 0;font-size:15px;line-height:1.6;color:#46586b">
+    ${ok
+      ? 'Every check passed. If a real email was sent, open that mailbox now and confirm it arrived — a send being accepted is not proof it was delivered.'
+      : `${failed.length} thing${failed.length === 1 ? '' : 's'} need${failed.length === 1 ? 's' : ''} fixing: <strong>${esc(failed.map((c) => c.name).join(', '))}</strong>. Each one below says what to do.`}
+  </p>
+  ${note ? `<p style="margin:14px 0 0;padding:12px 14px;background:#fdf6e7;border-radius:4px;font-size:13.5px;line-height:1.6;color:#6b4f12">${esc(note)}</p>` : ''}
+  <ul style="list-style:none;margin:22px 0 0;padding:0;display:flex;flex-direction:column;gap:10px">${rows}</ul>
+  <p style="margin:26px 0 0;font-size:12.5px;color:#74869a;line-height:1.6">
+    Add <code>?deliverTo=you@refrigerationservices.com.au&amp;token=YOUR_TOKEN</code> to send one real test report.
+  </p>
+</div>
+</body></html>`;
+}
+
 /** Render results for a terminal. Exported so tests can assert on the format. */
 export function formatPreflight({ ok, checks }) {
   const mark = { pass: '  ok  ', fail: ' FAIL ', skip: ' skip ' };

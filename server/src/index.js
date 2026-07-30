@@ -28,7 +28,7 @@ import { checkRecipient } from './recipients.js';
 import { sendReport, MAIL_MODE, verifyTransport } from './mailer.js';
 import { runChatTurn, activeProvider, chatConfigured, providerLabel } from './chat.js';
 import { DEMO_MODE, currentHomeObservation } from './demo.js';
-import { runPreflight } from './preflight.js';
+import { runPreflight, formatPreflightHtml } from './preflight.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = path.resolve(__dirname, '../../web');
@@ -114,7 +114,14 @@ app.get('/api/preflight', wrap(async (req, res) => {
   }
 
   const result = await runPreflight({ deliverTo });
-  res.json(note ? { ...result, note } : result);
+  const payload = note ? { ...result, note } : result;
+
+  // A browser gets a readable page; curl and scripts get JSON.
+  if (req.accepts(['json', 'html']) === 'html') {
+    res.type('html').send(formatPreflightHtml(payload));
+    return;
+  }
+  res.json(payload);
 }));
 
 app.get('/api/current', wrap(async (req, res) => {

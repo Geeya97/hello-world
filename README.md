@@ -16,8 +16,11 @@ Weather dispatches for a Melbourne refrigeration business. Two sections, three s
 
 ---
 
-**Presenting with this? Read [DEMO.md](DEMO.md)** — it is the runbook, including the preflight
-check and a fallback for everything that can fail on the day.
+**Not a coder? Start with [SETUP.md](SETUP.md)** — getting this online with working email, in
+clicks, no terminal.
+
+**Presenting with this? Read [DEMO.md](DEMO.md)** — the runbook, including the preflight check and
+a fallback for everything that can fail on the day.
 
 ---
 
@@ -216,7 +219,7 @@ artifact/        the Claude-space preview
 | Route | Purpose |
 | --- | --- |
 | `GET /api/health` | mail mode, whether the chat agent is configured |
-| `GET /api/preflight?deliverTo=` | run every dependency check against this instance |
+| `GET /api/preflight` | run every dependency check; readable page in a browser, JSON to scripts |
 | `GET /api/current` | BOM observation for Sunshine West + rendered report |
 | `GET /api/weather?location=&datetime=` | any AU suburb, any date |
 | `POST /api/send` | deliver a report to one allowed recipient |
@@ -227,7 +230,7 @@ artifact/        the Claude-space preview
 ## Testing
 
 ```bash
-cd server && npm test     # 80 tests
+cd server && npm test     # 84 tests
 ```
 
 Covers the BOM parser against both a hand-written and a **real** BOM payload, the wet-bulb maths
