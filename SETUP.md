@@ -130,6 +130,16 @@ fine for a presentation. But there's no reason to leave it switched on afterward
 
 ---
 
+## If sending is slow or a draft opens instead
+
+If a send takes ~12 seconds and then opens a Gmail draft with a message about SMTP being blocked,
+that is your network refusing to let programs send mail directly — common on work, campus and
+public WiFi. **The app handles it:** the report is fully written, you just press Send in the Gmail
+window that opened. If you'd rather avoid it, try a phone hotspot, or use the hosted version, where
+mail leaves a datacentre instead of your connection.
+
+---
+
 ## If you get stuck
 
 Copy the error message you see and send it over. The messages were written to say what's wrong and

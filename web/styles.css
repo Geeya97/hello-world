@@ -23,6 +23,14 @@
 
 * { box-sizing: border-box; }
 
+/* The browser hides [hidden] with `display: none`, but that comes from the UA
+   stylesheet, so ANY author rule setting `display` beats it. Several elements
+   here are toggled by the hidden attribute and also carry `display: flex/grid`
+   (.error, .readings, .suggestions), which made them permanently visible — an
+   empty warning icon sat under the email field on every page load. This has to
+   stay above the component rules and keep !important. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   min-height: 100vh;

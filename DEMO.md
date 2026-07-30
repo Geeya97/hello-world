@@ -110,8 +110,8 @@ You want **Ready.** Every check names its own fix if it fails. Then:
 | --- | --- | --- |
 | Amber notice: "Bureau refused this connection" | BOM blocks traffic it judges automated, and refuses some networks and datacentre IPs | **Nothing to do.** The app already fell back to Open-Meteo for the same location — still live weather, and every report names the source. Just mention it if asked. |
 | Readings won't load at all | Both BOM and Open-Meteo unreachable | Set `DEMO_MODE=1` and restart. Serves a recorded observation, clearly labelled. Demo continues. |
-| Send fails, timeout | Network blocks SMTP | Set `MAIL_MODE=compose`. Each send opens a pre-filled Gmail draft you press Send on. Works on any network. |
-| Send fails, "Invalid login" | Wrong App Password, or 2FA off | Regenerate it. Check for pasted spaces. |
+| Toast: "This network blocks outbound SMTP" | Venue/campus/corporate WiFi blocks ports 465/587 | **Already handled** — a pre-filled Gmail draft opened instead; press Send in it. To avoid the extra tap entirely, present from a phone hotspot or set `MAIL_MODE=compose` so drafts are the expected behaviour. |
+| Toast: "Gmail rejected the App Password" | Wrong password, spaces left in, or 2FA off | Regenerate it at myaccount.google.com/apppasswords. A draft still opened, so the demo continues. |
 | Chatbot says it needs a key | `GEMINI_API_KEY` missing or invalid | Run `npm run check`. The top section is unaffected; demo that instead. |
 | Chatbot says quota exceeded | Gemini free-tier limit hit | Limits are per-minute as well as per-day. Wait a minute. **Don't rehearse the chatbot repeatedly right before presenting** — you can exhaust the daily quota. |
 | Chatbot says the model is unavailable | Some models are closed to newer API keys | Set `GEMINI_MODEL=gemini-flash-latest`, which is verified working. |

@@ -177,8 +177,16 @@ async function dispatchOne() {
     if (result.mode === 'compose' && result.composeUrl) {
       // Compose mode: hand the pre-filled draft to Gmail and let the human send it.
       window.open(result.composeUrl, '_blank', 'noopener');
-      markRow(row, `${result.to} — draft opened in Gmail`);
-      toast('good', `Draft ready for ${result.to}. Press Send in Gmail.`);
+
+      if (result.fellBackFrom === 'smtp') {
+        // Automatic sending was configured but failed — say so, rather than
+        // letting it look like this was the intended behaviour.
+        markRow(row, `${result.to} — draft opened (automatic send failed)`);
+        toast('bad', result.reason ?? 'Automatic sending failed; a Gmail draft was opened instead.');
+      } else {
+        markRow(row, `${result.to} — draft opened in Gmail`);
+        toast('good', `Draft ready for ${result.to}. Press Send in Gmail.`);
+      }
     } else {
       markRow(row, `${result.to} — sent`);
       toast('good', `Report sent to ${result.to}.`);
@@ -424,11 +432,32 @@ function addThinking() {
 
 // ═════════════════════════════════════════════════════════════ plumbing
 
-async function api(path, options = {}) {
-  const res = await fetch(`${API}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
-  });
+/**
+ * Every request is bounded. Without a timeout a stalled request — a network
+ * silently swallowing SMTP, a sleeping host — leaves the button spinning forever
+ * with no explanation, which is precisely what you don't want on stage.
+ */
+async function api(path, { timeoutMs = 45_000, ...options } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(
+        `That took longer than ${Math.round(timeoutMs / 1000)} seconds and was given up on. If the app is hosted it may have been asleep — try again.`,
+      );
+    }
+    throw new Error('Could not reach the app. Check your connection and try again.');
+  } finally {
+    clearTimeout(timer);
+  }
 
   let payload = null;
   try {
