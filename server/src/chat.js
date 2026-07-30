@@ -17,7 +17,7 @@ import { runGeminiTurn } from './llm/gemini.js';
 import { runAnthropicTurn } from './llm/anthropic.js';
 import { geocodeAustralianPlace, fetchWeatherAt } from './openmeteo.js';
 import { SUNSHINE_WEST } from './bom.js';
-import { currentHomeObservation } from './demo.js';
+import { currentHomeObservation } from './observation.js';
 import { buildReport } from './report.js';
 import { checkRecipient, ALLOWED_DOMAIN, REJECTION_MESSAGE } from './recipients.js';
 import { sendReport } from './mailer.js';

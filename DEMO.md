@@ -108,7 +108,8 @@ You want **Ready.** Every check names its own fix if it fails. Then:
 
 | Symptom | Cause | Do this |
 | --- | --- | --- |
-| Readings won't load | BOM unreachable or blocked | Set `DEMO_MODE=1` in `.env` and restart. Serves a recorded observation, clearly labelled. Demo continues. |
+| Amber notice: "Bureau refused this connection" | BOM blocks traffic it judges automated, and refuses some networks and datacentre IPs | **Nothing to do.** The app already fell back to Open-Meteo for the same location — still live weather, and every report names the source. Just mention it if asked. |
+| Readings won't load at all | Both BOM and Open-Meteo unreachable | Set `DEMO_MODE=1` and restart. Serves a recorded observation, clearly labelled. Demo continues. |
 | Send fails, timeout | Network blocks SMTP | Set `MAIL_MODE=compose`. Each send opens a pre-filled Gmail draft you press Send on. Works on any network. |
 | Send fails, "Invalid login" | Wrong App Password, or 2FA off | Regenerate it. Check for pasted spaces. |
 | Chatbot says it needs a key | `GEMINI_API_KEY` missing or invalid | Run `npm run check`. The top section is unaffected; demo that instead. |
@@ -124,11 +125,41 @@ the chatbot is scripted. Good enough to show the interaction if everything else 
 
 ---
 
+## How much can you test, and how long can it run?
+
+**Weather lookups — effectively unlimited.** Observations are cached for 10 minutes, so refreshing
+the page repeatedly does not re-hit the source. Test as much as you like.
+
+**Emails — dozens are fine.** A free Gmail account sends roughly 500 a day through SMTP, and the
+app caps itself at 12 a minute. Sending 20-30 test reports costs you nothing.
+
+**The chatbot is the tight one.** Gemini's free tier is limited per minute *and* per day, and one
+question costs **2-4 API calls**, not one, because the agent calls a tool and then answers. Budget
+around **10-15 chatbot questions while rehearsing** and leave the rest for the day. If you see
+"quota exceeded", waiting a minute usually clears the per-minute limit; the daily one resets after
+24 hours. This is the only thing you can exhaust by over-rehearsing.
+
+**How long it can stay running — indefinitely.** Render's free tier covers one service running
+continuously. Two things to know:
+
+- It sleeps after ~15 minutes with no visitors, and takes 30-60 seconds to wake.
+- **While the app's tab is open it stays awake.** The page quietly pings the server every 10
+  minutes and stops when you switch away. So open it before you present, leave the tab open, and
+  there is no wake-up delay.
+
+There is no limit on how long a session lasts. Leave it deployed for days if you like — just
+suspend it afterwards.
+
+---
+
 ## What is and isn't verified
 
-**The live BOM fetch has never been run.** The container this was built in blocks `bom.gov.au`, so
-the parser is verified only against a recorded payload. `npm run check` is the first thing that
-will hit the real feed — run it well before the day, not on the morning.
+**BOM often refuses to serve this app, and that is now handled.** Confirmed from two separate
+networks: BOM returns 403 to traffic it judges automated. The app tries three BOM stations, then
+falls back to Open-Meteo for the same coordinates, labelling the source in the report and on the
+page. The weather section works either way — you may just be showing Open-Meteo data rather than
+Bureau data. The parser itself is verified against a genuine BOM payload, so if BOM does answer,
+the readings will be correct.
 
 **The Gemini agent is verified working.** Unlike BOM, `generativelanguage.googleapis.com` is
 reachable from the build container, so the agent was tested end to end against the live API: it

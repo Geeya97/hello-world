@@ -99,6 +99,11 @@ The most likely red cross is Gmail. If it says *"Gmail rejected the credentials"
 always one of three things: you used your normal Gmail password, you left the spaces in the App
 Password, or 2-Step Verification isn't on.
 
+**An amber "!" next to Bureau of Meteorology is fine — not a failure.** BOM blocks a lot of
+automated traffic. When that happens the app automatically uses Open-Meteo for the same location
+instead: still real live weather, and the report says which source it used. The page shows a small
+amber note so you're never caught out on stage.
+
 ---
 
 ## Step 5 — Before you present

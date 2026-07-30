@@ -13,14 +13,15 @@ import { geocodeAustralianPlace } from './openmeteo.js';
 import { buildReport } from './report.js';
 import { checkRecipient } from './recipients.js';
 import { MAIL_MODE, sendReport, verifyTransport } from './mailer.js';
-import { DEMO_MODE, demoObservation, currentHomeObservation } from './demo.js';
+import { DEMO_MODE, demoObservation } from './demo.js';
+import { currentHomeObservation } from './observation.js';
 import { activeProvider } from './chat.js';
 import { runGeminiTurn, DEFAULT_MODEL as DEFAULT_GEMINI_MODEL } from './llm/gemini.js';
 
 /**
  * @typedef {object} CheckResult
  * @property {string} name
- * @property {'pass'|'fail'|'skip'} status
+ * @property {'pass'|'warn'|'fail'|'skip'} status
  * @property {string} detail   what happened
  * @property {string} [fix]    what to do about it, when it failed
  */
@@ -41,6 +42,8 @@ export async function runPreflight({ deliverTo = process.env.PREFLIGHT_TO ?? nul
   checks.push(await checkSmtp());
   checks.push(await checkDelivery(deliverTo));
 
+  // 'warn' deliberately does not fail the run: it means a preferred source was
+  // unavailable but the app degraded to a working one.
   return { ok: checks.every((c) => c.status !== 'fail'), checks };
 }
 
@@ -74,12 +77,24 @@ async function checkBom() {
       name,
       `${obs.station?.name ?? 'BOM'} at ${obs.observedAt.timeLabel}: dry bulb ${obs.dryBulbC} °C.${wetBulbNote}`,
     );
-  } catch (err) {
-    return fail(
-      name,
-      err.message,
-      'BOM blocks non-browser clients and some networks block bom.gov.au. If this is the only failure you can still demo with DEMO_MODE=1, which serves a recorded observation.',
-    );
+  } catch (bomError) {
+    // BOM being blocked is common and no longer fatal — the app falls back to
+    // Open-Meteo for the same coordinates. Report it as a warning if that works,
+    // because the demo will run; only a total loss of weather is a failure.
+    try {
+      const obs = await currentHomeObservation();
+      return warn(
+        name,
+        `BOM refused this network (${bomError.message.slice(0, 90)}…). Fell back to ${obs.source} — dry bulb ${obs.dryBulbC} °C, wet bulb ${obs.wetBulbC} °C. The app works and every report names this source, so nothing is passed off as a Bureau reading.`,
+        'Nothing to fix for the demo. BOM blocks traffic it judges automated and refuses some networks and datacentre IPs outright; trying from a home connection sometimes works where a host does not.',
+      );
+    } catch (fallbackError) {
+      return fail(
+        name,
+        `BOM refused this network and the Open-Meteo fallback also failed. ${fallbackError.message}`,
+        'Set DEMO_MODE=1 to present with a recorded observation, clearly labelled as a sample. Check the network allows outbound HTTPS.',
+      );
+    }
   }
 }
 
@@ -297,6 +312,7 @@ async function checkDelivery(deliverTo) {
 // ──────────────────────────────────────────────────────────────────── helpers
 
 const pass = (name, detail) => ({ name, status: 'pass', detail });
+const warn = (name, detail, fix) => ({ name, status: 'warn', detail, fix });
 const skip = (name, detail) => ({ name, status: 'skip', detail });
 const fail = (name, detail, fix) => ({ name, status: 'fail', detail, fix });
 
@@ -310,8 +326,8 @@ const fail = (name, detail, fix) => ({ name, status: 'fail', detail, fix });
 export function formatPreflightHtml({ ok, checks, note }) {
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-  const mark = { pass: '✓', fail: '✕', skip: '–' };
-  const colour = { pass: '#1a7f5a', fail: '#b3243c', skip: '#74869a' };
+  const mark = { pass: '✓', warn: '!', fail: '✕', skip: '–' };
+  const colour = { pass: '#1a7f5a', warn: '#b5730b', fail: '#b3243c', skip: '#74869a' };
 
   const rows = checks.map((c) => `
     <li style="border:1px solid #dde5ec;border-left:4px solid ${colour[c.status]};border-radius:4px;padding:14px 16px;background:#fff">
@@ -336,7 +352,7 @@ export function formatPreflightHtml({ ok, checks, note }) {
   <h1 style="margin:8px 0 0;font-size:26px;letter-spacing:-.02em">${ok ? 'Ready to go' : 'Not ready yet'}</h1>
   <p style="margin:10px 0 0;font-size:15px;line-height:1.6;color:#46586b">
     ${ok
-      ? 'Every check passed. If a real email was sent, open that mailbox now and confirm it arrived — a send being accepted is not proof it was delivered.'
+      ? `Good to present.${checks.some((c) => c.status === 'warn') ? ' One thing degraded to a backup — see the amber item below, it is not a problem.' : ''} If a real email was sent, open that mailbox now and confirm it arrived — a send being accepted is not proof it was delivered.`
       : `${failed.length} thing${failed.length === 1 ? '' : 's'} need${failed.length === 1 ? 's' : ''} fixing: <strong>${esc(failed.map((c) => c.name).join(', '))}</strong>. Each one below says what to do.`}
   </p>
   ${note ? `<p style="margin:14px 0 0;padding:12px 14px;background:#fdf6e7;border-radius:4px;font-size:13.5px;line-height:1.6;color:#6b4f12">${esc(note)}</p>` : ''}
@@ -350,7 +366,7 @@ export function formatPreflightHtml({ ok, checks, note }) {
 
 /** Render results for a terminal. Exported so tests can assert on the format. */
 export function formatPreflight({ ok, checks }) {
-  const mark = { pass: '  ok  ', fail: ' FAIL ', skip: ' skip ' };
+  const mark = { pass: '  ok  ', warn: ' warn ', fail: ' FAIL ', skip: ' skip ' };
   const lines = ['', 'Current Weather App — preflight', '─'.repeat(64)];
 
   for (const check of checks) {
@@ -362,11 +378,12 @@ export function formatPreflight({ ok, checks }) {
 
   const failed = checks.filter((c) => c.status === 'fail');
   const skipped = checks.filter((c) => c.status === 'skip');
+  const warned = checks.filter((c) => c.status === 'warn');
 
   lines.push('─'.repeat(64));
   lines.push(
     ok
-      ? `Ready. ${checks.length - skipped.length} of ${checks.length} checks passed${skipped.length ? `, ${skipped.length} skipped` : ''}.`
+      ? `Ready. ${checks.length - skipped.length - warned.length} of ${checks.length} checks passed${warned.length ? `, ${warned.length} with a warning` : ''}${skipped.length ? `, ${skipped.length} skipped` : ''}.`
       : `Not ready — ${failed.length} check${failed.length === 1 ? '' : 's'} failed: ${failed.map((c) => c.name).join(', ')}.`,
   );
   lines.push('');

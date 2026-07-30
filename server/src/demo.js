@@ -11,27 +11,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import {
-  parseBomPayload,
-  SUNSHINE_WEST_STATIONS,
-  describeInstant,
-  SUNSHINE_WEST,
-  fetchSunshineWestObservation,
-} from './bom.js';
+import { parseBomPayload, SUNSHINE_WEST_STATIONS, describeInstant, SUNSHINE_WEST } from './bom.js';
 
 export const DEMO_MODE = process.env.DEMO_MODE === '1';
 
-/**
- * The current observation for Sunshine West, honouring DEMO_MODE.
- *
- * Every caller must go through this rather than calling
- * fetchSunshineWestObservation() directly. The chat agent's tools originally
- * bypassed it, so DEMO_MODE fixed the page but left the agent unable to answer —
- * the one thing DEMO_MODE exists to prevent.
- */
-export function currentHomeObservation() {
-  return DEMO_MODE ? Promise.resolve(demoObservation()) : fetchSunshineWestObservation();
-}
 
 const fixturePath = fileURLToPath(new URL('../test/fixtures/bom-laverton.json', import.meta.url));
 

@@ -171,6 +171,15 @@ main {
   white-space: pre;
 }
 
+/* ── fallback notice ───────────────────────────────────────────────────── */
+.fallback-notice {
+  margin: 14px 0 0; padding: 11px 14px; border-radius: 10px;
+  font-size: 12.5px; line-height: 1.6;
+  color: var(--warm);
+  background: rgb(251 191 36 / 0.08);
+  border: 1px solid rgb(251 191 36 / 0.28);
+}
+
 /* ── sent-this-session log (demo evidence) ─────────────────────────────── */
 .sent-panel { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
 

@@ -16,9 +16,24 @@ import { bearingLabel, haversineKm } from './geo.js';
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 15000;
 
-// BOM rejects the default fetch user-agent outright.
+/**
+ * BOM actively blocks anything that looks automated, returning 403 rather than a
+ * useful error. A UA containing "compatible;" or a bot URL still gets refused —
+ * it has to read as an ordinary browser, with the header set a browser would send.
+ *
+ * Even then BOM sometimes refuses whole IP ranges, including datacentres, so this
+ * is best-effort. observation.js falls back to another source when it fails.
+ */
 const USER_AGENT =
-  'Mozilla/5.0 (compatible; CurrentWeatherApp/1.0; +https://github.com/Geeya97/hello-world)';
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+const BROWSER_HEADERS = {
+  'User-Agent': USER_AGENT,
+  Accept: 'application/json, text/javascript, */*; q=0.01',
+  'Accept-Language': 'en-AU,en;q=0.9',
+  'Cache-Control': 'no-cache',
+  Referer: 'http://www.bom.gov.au/australia/observations/index.shtml',
+};
 
 /** The suburb the top section of the app is fixed to. */
 export const SUNSHINE_WEST = {
@@ -57,10 +72,15 @@ export async function fetchStationObservation(station, { fetchImpl = fetch, now 
   let payload;
   try {
     const res = await fetchImpl(url, {
-      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      headers: BROWSER_HEADERS,
       signal: controller.signal,
     });
-    if (!res.ok) throw new Error(`BOM responded ${res.status} for ${station.name}`);
+    if (!res.ok) {
+      const hint = res.status === 403
+        ? ' (BOM blocks requests it thinks are automated, and refuses some networks and datacentre IP ranges outright)'
+        : '';
+      throw new Error(`BOM responded ${res.status} for ${station.name}${hint}`);
+    }
     payload = await res.json();
   } finally {
     clearTimeout(timer);

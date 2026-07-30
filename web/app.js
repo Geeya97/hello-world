@@ -62,6 +62,37 @@ async function loadCurrent() {
   }
 }
 
+/**
+ * Keep a free-tier host awake while this tab is open.
+ *
+ * Render's free plan sleeps an instance after ~15 minutes idle and takes 30-60
+ * seconds to wake — a long silence in the middle of a presentation. A cheap ping
+ * every 10 minutes avoids it, and stops when the tab is hidden so it costs
+ * nothing while you're not using it.
+ */
+function startKeepAwake() {
+  const TEN_MINUTES = 10 * 60 * 1000;
+  let timer = null;
+
+  const ping = () => {
+    fetch(`${API}/api/health`, { cache: 'no-store' }).catch(() => { /* offline is fine */ });
+  };
+
+  const start = () => {
+    if (timer === null) timer = setInterval(ping, TEN_MINUTES);
+  };
+  const stop = () => {
+    if (timer !== null) { clearInterval(timer); timer = null; }
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop();
+    else { ping(); start(); }
+  });
+
+  start();
+}
+
 function renderReadings(obs) {
   const t = (v, unit, dp = 1) =>
     v === null || v === undefined ? '—' : `${Number(v).toFixed(dp)}${unit}`;
@@ -81,6 +112,16 @@ function renderReadings(obs) {
   if (obs.wetBulbMethod) bits.push(`Wet bulb via ${obs.wetBulbMethod}`);
   bits.push(`Source: ${obs.source}`);
   els.provenance.textContent = bits.join(' · ');
+
+  // Say plainly when BOM was unavailable, rather than quietly showing another
+  // source's numbers under a Bureau-branded heading.
+  if (obs.fallbackFrom === 'bom') {
+    const notice = document.createElement('p');
+    notice.className = 'fallback-notice';
+    notice.textContent =
+      `The Bureau of Meteorology refused this connection, so these readings come from ${obs.source.replace(/ \(.*\)$/, '')} for the same location. Still live weather — every report says which source it used.`;
+    els.provenance.before(notice);
+  }
 
   els.liveLoading.hidden = true;
   els.readings.hidden = false;
@@ -438,3 +479,4 @@ api('/api/health')
   .catch(() => { /* /api/current below reports connectivity problems already. */ });
 
 void loadCurrent();
+startKeepAwake();

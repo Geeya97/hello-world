@@ -27,7 +27,8 @@ import { buildReport } from './report.js';
 import { checkRecipient } from './recipients.js';
 import { sendReport, MAIL_MODE, verifyTransport } from './mailer.js';
 import { runChatTurn, activeProvider, chatConfigured, providerLabel } from './chat.js';
-import { DEMO_MODE, currentHomeObservation } from './demo.js';
+import { DEMO_MODE } from './demo.js';
+import { currentHomeObservation } from './observation.js';
 import { runPreflight, formatPreflightHtml } from './preflight.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
