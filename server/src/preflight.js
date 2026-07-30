@@ -13,7 +13,9 @@ import { geocodeAustralianPlace } from './openmeteo.js';
 import { buildReport } from './report.js';
 import { checkRecipient } from './recipients.js';
 import { MAIL_MODE, sendReport, verifyTransport } from './mailer.js';
-import { DEMO_MODE, demoObservation } from './demo.js';
+import { DEMO_MODE, demoObservation, currentHomeObservation } from './demo.js';
+import { activeProvider } from './chat.js';
+import { runGeminiTurn, DEFAULT_MODEL as DEFAULT_GEMINI_MODEL } from './llm/gemini.js';
 
 /**
  * @typedef {object} CheckResult
@@ -35,7 +37,7 @@ export async function runPreflight({ deliverTo = process.env.PREFLIGHT_TO ?? nul
 
   checks.push(await checkBom());
   checks.push(await checkOpenMeteo());
-  checks.push(await checkAnthropic());
+  checks.push(await checkChatAgent());
   checks.push(await checkSmtp());
   checks.push(await checkDelivery(deliverTo));
 
@@ -98,6 +100,73 @@ async function checkOpenMeteo() {
   }
 }
 
+/** Dispatches to whichever brain is configured. */
+async function checkChatAgent() {
+  return activeProvider() === 'anthropic' ? checkAnthropic() : checkGemini();
+}
+
+/**
+ * The Gemini check does a real tool-calling round trip, not just a "say hello".
+ * The agent's whole job depends on function calling, and a key can be valid for
+ * plain generation while the chosen model is closed to new accounts — which is
+ * exactly what gemini-2.5-flash does. So this exercises the real path.
+ */
+async function checkGemini() {
+  const name = 'Gemini API (chat agent)';
+  const key = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+
+  if (!key) {
+    return fail(
+      name,
+      'GEMINI_API_KEY is not set.',
+      'Get a free key at aistudio.google.com/apikey and put it in .env (local) or the host dashboard. Without it only the chat section is unavailable — the weather and email half works regardless.',
+    );
+  }
+
+  try {
+    const { reply } = await runGeminiTurn({
+      system: 'You are a test harness. Call the ping tool, then reply with exactly what it returned.',
+      tools: [{
+        name: 'ping',
+        description: 'Returns a token proving tool calling works.',
+        input_schema: { type: 'object', properties: {} },
+      }],
+      history: [{ role: 'user', content: 'Call the ping tool and tell me the token.' }],
+      runTool: async () => ({ result: { token: 'PREFLIGHT-OK' } }),
+      maxRounds: 3,
+    });
+
+    if (!/PREFLIGHT-OK/.test(reply)) {
+      return fail(
+        name,
+        `${model} answered but did not complete the tool round trip. It said: "${reply.slice(0, 120)}"`,
+        'Function calling is not working on this model. Set GEMINI_MODEL=gemini-flash-latest, which is verified to support it.',
+      );
+    }
+
+    return pass(name, `${model} completed a tool-calling round trip. Key valid and function calling works.`);
+  } catch (err) {
+    // runGeminiTurn already translates the common failures into actionable text.
+    const message = err.message ?? String(err);
+
+    if (/quota/i.test(message)) {
+      return fail(
+        name,
+        message,
+        `Free-tier limits are per-minute and per-day. Wait a minute and re-run. Available models vary by key — list yours with:  curl "https://generativelanguage.googleapis.com/v1beta/models?key=YOUR_KEY"`,
+      );
+    }
+    if (/not available to this API key/i.test(message)) {
+      return fail(name, message, 'gemini-flash-latest is verified working — set GEMINI_MODEL to that.');
+    }
+    if (/rejected|not valid/i.test(message)) {
+      return fail(name, message, 'Generate a fresh key at aistudio.google.com/apikey.');
+    }
+    return fail(name, message, 'Check network access to generativelanguage.googleapis.com.');
+  }
+}
+
 async function checkAnthropic() {
   const name = 'Claude API (chat agent)';
   const key = process.env.ANTHROPIC_API_KEY;
@@ -105,8 +174,8 @@ async function checkAnthropic() {
   if (!key) {
     return fail(
       name,
-      'ANTHROPIC_API_KEY is not set.',
-      'Create a key at console.anthropic.com and add credit — an API key is a separate paid product from a Claude.ai subscription. Then set it in .env (local) or the host dashboard. Without it only the chat section is unavailable.',
+      'LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set.',
+      'Create a key at console.anthropic.com and add credit — an Anthropic API key is a separate paid product from a Claude.ai subscription. Or switch to Gemini, which has a free tier, by setting GEMINI_API_KEY.',
     );
   }
 
@@ -124,7 +193,7 @@ async function checkAnthropic() {
     const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
     return pass(name, `${model} replied "${text}". Key valid and credit available.`);
   } catch (err) {
-    // These three failures look identical to a user but need different fixes.
+    // These failures look identical to a user but need different fixes.
     const status = err?.status;
     if (status === 401) {
       return fail(name, 'Key rejected (401).', 'The key is wrong or has been revoked. Generate a fresh one at console.anthropic.com.');
@@ -205,7 +274,7 @@ async function checkDelivery(deliverTo) {
   }
 
   try {
-    const observation = DEMO_MODE ? demoObservation() : await fetchSunshineWestObservation();
+    const observation = await currentHomeObservation();
     const report = buildReport(observation);
     const result = await sendReport({ to: check.email, ...report });
 

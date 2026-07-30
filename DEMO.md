@@ -13,7 +13,7 @@ None of these should ever be pasted into a chat or committed to the repo.
 | --- | --- | --- |
 | `GMAIL_USER` | the Gmail address that will send | — |
 | `GMAIL_APP_PASSWORD` | [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) | 16 characters. **Not your normal Gmail password** — Google blocks those from programs. Requires 2-Step Verification to be on, otherwise the page doesn't exist. |
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Only needed for the chatbot section. **A separate paid product from a Claude.ai subscription** — load a few dollars of credit. |
+| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Only needed for the chatbot section. Has a **free tier**, no card required. |
 
 Paste the App Password with no spaces. Google displays it as `abcd efgh ijkl mnop`; enter it as
 `abcdefghijklmnop`.
@@ -28,7 +28,7 @@ host, the email leaves a datacentre and the venue WiFi only has to load a web pa
 1. Push this branch to GitHub (already done).
 2. [Render dashboard](https://dashboard.render.com) → **New** → **Blueprint** → pick this repo.
    Render reads `render.yaml`.
-3. It will prompt for `GMAIL_USER`, `GMAIL_APP_PASSWORD` and `ANTHROPIC_API_KEY`. Paste them there.
+3. It will prompt for `GMAIL_USER`, `GMAIL_APP_PASSWORD` and `GEMINI_API_KEY`. Paste them there.
 4. Wait for the first deploy, then note your URL, e.g. `https://current-weather-app.onrender.com`.
 5. Confirm everything works:
    `https://your-url.onrender.com/api/preflight?deliverTo=you@refrigerationservices.com.au`
@@ -106,7 +106,9 @@ You want **Ready.** Every check names its own fix if it fails. Then:
 | Readings won't load | BOM unreachable or blocked | Set `DEMO_MODE=1` in `.env` and restart. Serves a recorded observation, clearly labelled. Demo continues. |
 | Send fails, timeout | Network blocks SMTP | Set `MAIL_MODE=compose`. Each send opens a pre-filled Gmail draft you press Send on. Works on any network. |
 | Send fails, "Invalid login" | Wrong App Password, or 2FA off | Regenerate it. Check for pasted spaces. |
-| Chatbot says it needs a key | `ANTHROPIC_API_KEY` missing or no credit | Run `npm run check` — it distinguishes missing key, invalid key and no credit. The top section is unaffected; demo that instead. |
+| Chatbot says it needs a key | `GEMINI_API_KEY` missing or invalid | Run `npm run check`. The top section is unaffected; demo that instead. |
+| Chatbot says quota exceeded | Gemini free-tier limit hit | Limits are per-minute as well as per-day. Wait a minute. **Don't rehearse the chatbot repeatedly right before presenting** — you can exhaust the daily quota. |
+| Chatbot says the model is unavailable | Some models are closed to newer API keys | Set `GEMINI_MODEL=gemini-flash-latest`, which is verified working. |
 | "localhost refused to connect" | Nothing is running | Launch the app first, or use the hosted URL. |
 | Hosted URL slow to load | Free instance was asleep | Wait 60s. Warm it before presenting. |
 
@@ -117,11 +119,17 @@ the chatbot is scripted. Good enough to show the interaction if everything else 
 
 ---
 
-## Two honest caveats
+## What is and isn't verified
 
 **The live BOM fetch has never been run.** The container this was built in blocks `bom.gov.au`, so
 the parser is verified only against a recorded payload. `npm run check` is the first thing that
 will hit the real feed — run it well before the day, not on the morning.
 
-**The Claude agent has never made a real call.** Same reason. Preflight's Anthropic check is the
-first genuine call it will make.
+**The Gemini agent is verified working.** Unlike BOM, `generativelanguage.googleapis.com` is
+reachable from the build container, so the agent was tested end to end against the live API: it
+calls the weather tool, quotes the real figures rather than inventing them, refuses non-family
+recipients with the exact required wording, and produces a server-generated report for valid ones.
+
+**Gmail sending is still unverified.** SMTP ports 25, 465 and 587 are all blocked from the build
+container, so `verifyTransport()` has never succeeded. `npm run check` on your machine or the host
+is the first real test of it.

@@ -423,11 +423,16 @@ function resolveApiBase() {
 
 els.emailInput.placeholder = `name@${ALLOWED_DOMAIN}`;
 
+// The badge names whichever brain the server is actually configured with, rather
+// than hardcoding one — the provider is a server-side setting.
 api('/api/health')
   .then((health) => {
-    if (!health.chatConfigured) {
-      $('agent-pill').textContent = 'Chat needs an API key';
-      $('agent-pill').style.color = 'var(--warm)';
+    const pill = $('agent-pill');
+    if (health.chatConfigured) {
+      pill.textContent = health.chatLabel ?? 'Weather agent';
+    } else {
+      pill.textContent = 'Chat needs an API key';
+      pill.style.color = 'var(--warm)';
     }
   })
   .catch(() => { /* /api/current below reports connectivity problems already. */ });

@@ -74,7 +74,7 @@ fun AgentSection(
                 )
             }
             Pill(
-                text = if (chatConfigured) "Powered by Claude" else "Needs an API key",
+                text = if (chatConfigured) "Weather agent" else "Needs an API key",
                 tint = if (chatConfigured) MaterialTheme.colorScheme.primary else Warm,
             )
         }

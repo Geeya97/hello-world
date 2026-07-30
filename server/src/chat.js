@@ -13,15 +13,48 @@
  *     restriction is a suggestion, and this needs to be a rule.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { runGeminiTurn } from './llm/gemini.js';
+import { runAnthropicTurn } from './llm/anthropic.js';
 import { geocodeAustralianPlace, fetchWeatherAt } from './openmeteo.js';
-import { fetchSunshineWestObservation, SUNSHINE_WEST } from './bom.js';
+import { SUNSHINE_WEST } from './bom.js';
+import { currentHomeObservation } from './demo.js';
 import { buildReport } from './report.js';
 import { checkRecipient, ALLOWED_DOMAIN, REJECTION_MESSAGE } from './recipients.js';
 import { sendReport } from './mailer.js';
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 const MAX_TOOL_ROUNDS = 6;
+
+/**
+ * Which brain. Defaults to Gemini when a key is present, so the common case
+ * needs no configuration; LLM_PROVIDER overrides it explicitly.
+ */
+export function activeProvider() {
+  const explicit = (process.env.LLM_PROVIDER ?? '').trim().toLowerCase();
+  if (explicit === 'gemini' || explicit === 'anthropic') return explicit;
+  if (process.env.GEMINI_API_KEY) return 'gemini';
+  if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
+  return 'gemini';
+}
+
+/** Whether the agent has what it needs to answer at all. */
+export function chatConfigured() {
+  return activeProvider() === 'gemini'
+    ? Boolean(process.env.GEMINI_API_KEY)
+    : Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+/** Human-readable label for the UI badge. */
+export function providerLabel() {
+  return activeProvider() === 'gemini'
+    ? `Powered by ${prettyModel(process.env.GEMINI_MODEL || 'gemini-flash-latest')}`
+    : `Powered by ${prettyModel(process.env.ANTHROPIC_MODEL || 'claude-sonnet-5')}`;
+}
+
+function prettyModel(id) {
+  if (id.startsWith('gemini')) return 'Gemini';
+  if (id.startsWith('claude')) return 'Claude';
+  return id;
+}
 
 const SYSTEM_PROMPT = `You are "Weather Ai Agent - Australia", the assistant inside the Current Weather App built for a refrigeration services family business in Melbourne.
 
@@ -97,49 +130,26 @@ const TOOLS = [
  * @param {Array<{role:'user'|'assistant', content:string}>} history
  * @returns {Promise<{reply: string, actions: Array<object>}>}
  */
-export async function runChatTurn(history, { client = defaultClient() } = {}) {
-  const messages = history
+export async function runChatTurn(history, { provider = activeProvider(), ...providerOptions } = {}) {
+  const messages = (history ?? [])
     .filter((m) => m && typeof m.content === 'string' && m.content.trim())
     .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
 
   if (messages.length === 0) throw badRequest('Say something first.');
 
-  const actions = [];
-
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1200,
-      system: SYSTEM_PROMPT,
-      tools: TOOLS,
-      messages,
-    });
-
-    if (response.stop_reason !== 'tool_use') {
-      return { reply: textOf(response), actions };
-    }
-
-    messages.push({ role: 'assistant', content: response.content });
-
-    const results = [];
-    for (const block of response.content) {
-      if (block.type !== 'tool_use') continue;
-      const { result, action } = await runTool(block.name, block.input ?? {});
-      if (action) actions.push(action);
-      results.push({
-        type: 'tool_result',
-        tool_use_id: block.id,
-        content: JSON.stringify(result),
-        ...(result.error ? { is_error: true } : {}),
-      });
-    }
-    messages.push({ role: 'user', content: results });
-  }
-
-  return {
-    reply: "That took more steps than I expected and I've stopped to avoid looping. Could you narrow the request down?",
-    actions,
+  // Both providers share the prompt, the tool definitions and — importantly —
+  // runTool, which is where the recipient rule is actually enforced. Swapping
+  // brains cannot loosen that.
+  const turn = {
+    system: SYSTEM_PROMPT,
+    tools: TOOLS,
+    history: messages,
+    runTool,
+    maxRounds: MAX_TOOL_ROUNDS,
+    ...providerOptions,
   };
+
+  return provider === 'anthropic' ? runAnthropicTurn(turn) : runGeminiTurn(turn);
 }
 
 async function runTool(name, input) {
@@ -152,7 +162,7 @@ async function runTool(name, input) {
       }
 
       case 'get_sunshine_west_now': {
-        const obs = await fetchSunshineWestObservation();
+        const obs = await currentHomeObservation();
         return { result: summarise(obs) };
       }
 
@@ -198,7 +208,7 @@ async function runTool(name, input) {
 async function weatherFor(location, datetime) {
   const wantsNow = !datetime;
   const isHome = /sunshine\s*west/i.test(String(location ?? ''));
-  if (isHome && wantsNow) return fetchSunshineWestObservation();
+  if (isHome && wantsNow) return currentHomeObservation();
 
   const query = String(location ?? '').trim() || 'Sunshine West, VIC';
   const matches = isHome ? [SUNSHINE_WEST] : await geocodeAustralianPlace(query);
@@ -260,28 +270,6 @@ function buildTextSafe(obs) {
   } catch {
     return null;
   }
-}
-
-function textOf(response) {
-  return response.content
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text)
-    .join('\n')
-    .trim();
-}
-
-let cachedClient = null;
-function defaultClient() {
-  if (!cachedClient) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw badRequest(
-        'The chat agent needs an Anthropic API key. Set ANTHROPIC_API_KEY in the server environment.',
-      );
-    }
-    cachedClient = new Anthropic({ apiKey });
-  }
-  return cachedClient;
 }
 
 function badRequest(message) {

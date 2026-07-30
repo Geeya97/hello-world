@@ -21,18 +21,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fetchSunshineWestObservation, SUNSHINE_WEST } from './bom.js';
+import { SUNSHINE_WEST } from './bom.js';
 import { geocodeAustralianPlace, fetchWeatherAt } from './openmeteo.js';
 import { buildReport } from './report.js';
 import { checkRecipient } from './recipients.js';
 import { sendReport, MAIL_MODE, verifyTransport } from './mailer.js';
-import { runChatTurn } from './chat.js';
-import { DEMO_MODE, demoObservation } from './demo.js';
+import { runChatTurn, activeProvider, chatConfigured, providerLabel } from './chat.js';
+import { DEMO_MODE, currentHomeObservation } from './demo.js';
 import { runPreflight } from './preflight.js';
-
-/** BOM observation for Sunshine West, or the recorded sample when in demo mode. */
-const currentHomeObservation = () =>
-  DEMO_MODE ? Promise.resolve(demoObservation()) : fetchSunshineWestObservation();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = path.resolve(__dirname, '../../web');
@@ -86,7 +82,9 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     mailMode: MAIL_MODE,
-    chatConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+    chatConfigured: chatConfigured(),
+    chatProvider: activeProvider(),
+    chatLabel: providerLabel(),
     demoMode: DEMO_MODE,
     home: SUNSHINE_WEST.label,
   });
@@ -192,7 +190,11 @@ if (process.env.NODE_ENV !== 'test') {
     }
 
     console.log(`\n  mail mode : ${MAIL_MODE}${MAIL_MODE === 'compose' ? ' (opens a Gmail draft; set MAIL_MODE=smtp to send automatically)' : ''}`);
-    console.log(`  chat agent: ${process.env.ANTHROPIC_API_KEY ? 'configured' : 'NOT configured — set ANTHROPIC_API_KEY'}`);
+    console.log(
+      `  chat agent: ${chatConfigured()
+        ? `${activeProvider()} — ${providerLabel()}`
+        : `NOT configured — set ${activeProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'}`}`,
+    );
     if (DEMO_MODE) console.log('  DEMO_MODE : on — serving a recorded BOM observation, not live data');
     console.log('');
 

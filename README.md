@@ -5,8 +5,8 @@ Weather dispatches for a Melbourne refrigeration business. Two sections, three s
 - **Manual Dispatch** — current Bureau of Meteorology conditions at Sunshine West, VIC, emailed
   to family addresses. Start opens a loop that keeps asking for the next address until you press
   **Give me a Break**.
-- **Weather Ai Agent - Australia** — a Claude-powered agent that does the same job for any
-  Australian suburb and any date, past or future.
+- **Weather Ai Agent - Australia** — an AI agent (Gemini by default, Claude optional) that does
+  the same job for any Australian suburb and any date, past or future.
 
 | Surface | Where it lives | What it needs |
 | --- | --- | --- |
@@ -48,7 +48,7 @@ URL that works anywhere, deploy it (see below).
 
 ```bash
 cd server
-npm run check                                              # BOM, Open-Meteo, Claude, Gmail
+npm run check                                              # BOM, Open-Meteo, Gemini, Gmail
 PREFLIGHT_TO=you@refrigerationservices.com.au npm run check # ...and send one real email
 ```
 
@@ -88,6 +88,10 @@ recipient; the server generates the report from real data and sends that. So the
 email invented weather, and cannot use the mail path to send arbitrary text to anyone. The
 domain rule is applied in the tool handler, not merely requested in the system prompt — chat
 input is untrusted, and a prompt-level restriction is a suggestion rather than a rule.
+
+Both providers share that one `runTool` implementation, so swapping brains cannot loosen the
+rule. Verified against live Gemini: asked to email a `@gmail.com` address it replies with exactly
+*"This email is not one of your family member"* and performs no send.
 
 ---
 
@@ -165,7 +169,7 @@ HTTP is permitted only for local development hosts; any deployed backend must be
 <https://claude.ai/code/artifact/3afa1727-1dc6-49fd-8aa8-f9530a636950> (private until you share it).
 
 A published artifact runs under a strict CSP with **no network access at all**, so it cannot
-fetch BOM, cannot run the Claude agent, and cannot send mail. What it does honestly is the whole
+fetch BOM, cannot run the AI agent, and cannot send mail. What it does honestly is the whole
 interaction — the dispatch loop, the recipient rule, the report format — on a bundled recorded
 observation, and it opens a real pre-filled Gmail draft. The page says so at the top.
 
@@ -181,7 +185,9 @@ server/src/
   report.js      the report format — text + HTML, single source of truth
   recipients.js  the domain rule
   mailer.js      Gmail compose links, or SMTP when enabled
-  chat.js        Anthropic proxy with tool use
+  chat.js        agent prompt, tool definitions, tool enforcement
+  llm/gemini.js  Gemini provider (REST, function calling)
+  llm/anthropic.js  Claude provider, optional via LLM_PROVIDER
   index.js       routes, CORS allowlist, rate limiting, static hosting
 web/             browser front end
 android/         Kotlin + Compose app
